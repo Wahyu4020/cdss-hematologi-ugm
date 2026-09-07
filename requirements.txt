@@ -1,9 +1,7 @@
 fastapi
-pydantic
+uvicorn
 scikit-learn
 xgboost
 shap
-matplotlib
-joblib
 pandas
-numpy
+matplotlib
