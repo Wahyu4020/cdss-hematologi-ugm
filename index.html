@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tri-Brid CDSS Hematologi</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; scroll-behavior: smooth; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .hero-section { background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%); color: white; padding: 100px 0 80px; }
+        .section-title { font-weight: 700; color: #2c3e50; margin-bottom: 40px; position: relative; padding-bottom: 15px; }
+        .section-title::after { content: ''; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 60px; height: 4px; background-color: #0d6efd; border-radius: 2px; }
+        .feature-card { background: white; border-radius: 12px; padding: 25px; height: 100%; box-shadow: 0 5px 15px rgba(0,0,0,0.05); border-top: 4px solid transparent; transition: all 0.3s ease; }
+        .feature-card:hover { transform: translateY(-5px); border-top: 4px solid #0d6efd; box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+        .app-container { background: white; border-radius: 15px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
+        .clix-box { background-color: #f1f4f9; border-left: 5px solid #0d6efd; padding: 15px; margin-bottom: 15px; border-radius: 0 8px 8px 0; font-size: 0.95rem;}
+        #resultArea { display: none; }
+        .step-circle { width: 50px; height: 50px; border-radius: 50%; background-color: #0d6efd; color: white; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: bold; margin: 0 auto 15px; }
+        
+        /* --- CSS KHUSUS PRINT (1 HALAMAN REKAM MEDIS SUPER PADAT) --- */
+        @media print {
+            /* 1. Sembunyikan elemen non-cetak mutlak */
+            nav, #beranda, #informasi, #panduan, footer, #cdssForm, #actionButtons, .d-print-none { 
+                display: none !important; 
+            }
+            
+            /* 2. Tarik ke atas & buang margin bawaan web */
+            @page { margin: 1cm; } /* Mempersempit margin kertas A4 */
+            body, .app-container, #aplikasi, #resultArea {
+                margin: 0 !important; padding: 0 !important; box-shadow: none !important; border: none !important;
+                background-color: white !important; width: 100% !important;
+            }
+            
+            #resultArea { display: block !important; }
+            
+            /* 3. Pengecilan Font & Elemen Ekstrem */
+            .display-5 { font-size: 1.3rem !important; margin-bottom: 0px !important; }
+            h4 { font-size: 0.9rem !important; margin-bottom: 6px !important; }
+            h5 { font-size: 0.75rem !important; margin-bottom: 4px !important; }
+            h6 { font-size: 0.7rem !important; margin-bottom: 2px !important; }
+            .badge { font-size: 0.65rem !important; border: 1px solid #000; color: #000 !important; background: transparent !important; padding: 2px 5px !important;}
+            .clix-box { padding: 3px 6px !important; font-size: 0.6rem !important; margin-bottom: 2px !important; border-left: 3px solid #000; background: #fff !important;}
+            .list-group-item { padding: 2px 4px !important; font-size: 0.65rem !important; }
+            
+            /* 4. Tabel Cetak */
+            .table-print { font-size: 0.6rem !important; margin-bottom: 8px !important; }
+            .table-print td, .table-print th { padding: 1px 3px !important; border: 1px solid #333 !important; }
+            .table-print th { background-color: #eee !important; -webkit-print-color-adjust: exact; }
+            
+            /* 5. TATA LETAK PARALEL PAKSA (nowrap agar gambar tidak terlempar ke bawah) */
+            .print-row { 
+                display: flex !important; 
+                flex-direction: row !important; 
+                flex-wrap: nowrap !important; /* Paksa agar tidak turun baris */
+                justify-content: space-between !important;
+                width: 100% !important; 
+                margin-bottom: 5px !important; 
+            }
+            .print-col-50 { width: 48% !important; display: block !important; }
+            .print-col-40 { width: 38% !important; display: block !important; }
+            .print-col-60 { width: 60% !important; display: block !important; }
+            
+            /* 6. Batas Gambar SHAP (Semakin kecil agar muat) */
+            #shapImg { max-height: 155px !important; width: auto !important; margin: 0 auto; display: block; object-fit: contain;}
+        }
+    </style>
+</head>
+<body>
+
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm fixed-top">
+        <div class="container">
+            <a class="navbar-brand fw-bold text-primary" href="#">🩺 Tri-Brid CDSS</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="#beranda">Beranda</a></li>
+                    <li class="nav-item"><a class="nav-link btn btn-primary text-white px-4 ms-2 rounded-pill" href="#aplikasi">Mulai CDSS</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- SECTION APLIKASI UTAMA (FORM CDSS) -->
+    <section id="aplikasi" class="py-5 mt-5">
+        <div class="container">
+            <!-- Ditambahkan d-print-none agar judul ini HILANG saat diprint -->
+            <h2 class="text-center section-title d-print-none">Ruang Kerja CDSS</h2>
+            
+            <div class="app-container">
+                <form id="cdssForm">
+                    <div class="row">
+                        <!-- PANEL KIRI: Data Laboratorium -->
+                        <div class="col-lg-8">
+                            <h5 class="mb-4 text-primary border-bottom pb-2">🧪 Pilar I — Input Darah Rutin (CBC)</h5>
+                            <div class="row g-3">
+                                <div class="col-md-3"><label class="form-label text-muted small fw-bold">Umur</label><input type="number" class="form-control bg-light" id="Age"></div>
+                                <div class="col-md-3"><label class="form-label text-muted small fw-bold">Gender (0=P, 1=L)</label><input type="number" class="form-control bg-light" id="Gender"></div>
+                                <div class="col-md-3"><label class="form-label text-muted small fw-bold">HB</label><input type="number" step="any" class="form-control bg-light" id="hb"></div>
+                                <div class="col-md-3"><label class="form-label text-muted small fw-bold">RBC</label><input type="number" step="any" class="form-control bg-light" id="rbc"></div>
+                                <div class="col-md-3"><label class="form-label text-muted small fw-bold">MCV</label><input type="number" step="any" class="form-control bg-light" id="mcv"></div>
+                                <div class="col-md-3"><label class="form-label text-muted small fw-bold">RDW</label><input type="number" step="any" class="form-control bg-light" id="rdw"></div>
+                                <div class="col-md-3"><label class="form-label text-muted small fw-bold">WBC</label><input type="number" step="any" class="form-control bg-light" id="wbc"></div>
+                                <div class="col-md-3"><label class="form-label text-muted small fw-bold">Neutrofil (%)</label><input type="number" step="any" class="form-control bg-light" id="neu"></div>
+                                <div class="col-md-3"><label class="form-label text-muted small fw-bold">Limfosit (%)</label><input type="number" step="any" class="form-control bg-light" id="lym"></div>
+                                <div class="col-md-3"><label class="form-label text-muted small fw-bold">Monosit (%)</label><input type="number" step="any" class="form-control bg-light" id="mon"></div>
+                                <div class="col-md-3"><label class="form-label text-muted small fw-bold">Eosinofil (%)</label><input type="number" step="any" class="form-control bg-light" id="eos"></div>
+                                <div class="col-md-3"><label class="form-label text-muted small fw-bold">Trombosit (PLT)</label><input type="number" step="any" class="form-control border-primary" id="plt" required></div>
+                            </div>
+                        </div>
+            
+                        <!-- PANEL KANAN: Simtom & Bobot -->
+                        <div class="col-lg-4 mt-4 mt-lg-0 border-start ps-lg-4">
+                            <h5 class="mb-3 text-primary border-bottom pb-2">🩺 Pilar II — Simtom Klinis</h5>
+                            <div id="symptomsList" class="mb-4 p-2 bg-light rounded shadow-sm border" style="max-height: 250px; overflow-y: auto;">
+                                <div class="form-check"><input class="form-check-input" type="checkbox" value="Petekie spontan / memar tanpa trauma"><label class="form-check-label small">Petekie spontan / memar tanpa trauma</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" value="Perdarahan mukosa (epistaksis, gusi)"><label class="form-check-label small">Perdarahan mukosa (epistaksis/gusi)</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" value="Demam tinggi 2–7 hari mendadak"><label class="form-check-label small">Demam tinggi 2–7 hari mendadak</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" value="Nyeri retro-orbital / sakit kepala hebat"><label class="form-check-label small">Nyeri retro-orbital / sakit kepala hebat</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" value="Mialgia / artralgia (nyeri otot-sendi)"><label class="form-check-label small">Mialgia / artralgia (nyeri otot-sendi)</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" value="Ruam kulit / dengue rash"><label class="form-check-label small">Ruam kulit / dengue rash</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" value="Riwayat trombosis / DVT / emboli"><label class="form-check-label small">Riwayat trombosis / DVT / emboli</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" value="Eritromelalgia / kemerahan ujung jari"><label class="form-check-label small">Eritromelalgia / kemerahan ujung jari</label></div>
+                                <hr class="my-2"><div class="form-check"><input class="form-check-input" type="checkbox" value="Asimptomatik (tidak ada keluhan klinis)"><label class="form-check-label small fw-bold text-muted">Asimptomatik (Tidak ada keluhan)</label></div>
+                            </div>
+            
+                            <h5 class="mb-3 text-primary border-bottom pb-2">⚙️ Kalibrasi Bobot (%)</h5>
+                            <div class="d-flex justify-content-between mb-1"><span class="small">Pilar I (AI)</span><input type="number" id="w_ml" class="form-control form-control-sm w-50" value="55"></div>
+                            <div class="d-flex justify-content-between mb-1"><span class="small">Pilar II (Klinis)</span><input type="number" id="w_sym" class="form-control form-control-sm w-50" value="25"></div>
+                            <div class="d-flex justify-content-between mb-3"><span class="small">Pilar III (WHO)</span><input type="number" id="w_who" class="form-control form-control-sm w-50" value="20"></div>
+                            
+                            <button type="submit" class="btn btn-primary w-100 fw-bold py-2 shadow-sm" id="btnSubmit">Eksekusi Fusi Analisis</button>
+                        </div>
+                    </div>
+                </form>
+            
+                <!-- ==================== AREA HASIL DIAGNOSIS & CETAK ==================== -->
+                <div class="mt-5 pt-4 border-top" id="resultArea">
+                    
+                    <!-- HEADER CETAK -->
+                    <div class="text-center mb-3">
+                        <h6 class="text-uppercase text-muted fw-bold tracking-wider">Hasil Diagnosis Tri-Brid CDSS</h6>
+                        <h2 class="display-5 fw-bold" id="diagText">-</h2>
+                        <h4 class="text-primary">Tingkat Keyakinan Prediksi: <span id="probText">-</span>%</h4>
+                    </div>
+
+                    <!-- BLOK 1: TABEL LAB & KLINIS (Hanya Muncul Saat Print / Tersembunyi di Web) -->
+                    <div id="printDataContainer" class="d-none d-print-block">
+                        <h6 class="fw-bold mb-1 border-bottom pb-1">I. Data Laboratorium & Fisiologis Pasien</h6>
+                        <div id="tableLabInject"></div>
+                        
+                        <div class="print-row">
+                            <div class="print-col-50">
+                                <h6 class="fw-bold mb-1 border-bottom pb-1">II. Laporan Gejala Klinis (Pilar II)</h6>
+                                <div id="symptomsInject" style="font-size: 0.6rem;"></div>
+                            </div>
+                            <div class="print-col-50">
+                                <h6 class="fw-bold mb-1 border-bottom pb-1">III. Verifikasi Kriteria WHO (Pilar III)</h6>
+                                <div id="whoInject"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- BLOK 2: HASIL AI & SHAP -->
+                    <!-- Dihapus class .row dan .col-lg-* agar bebas dari gangguan Grid Bootstrap saat Print -->
+                    <div class="print-row mt-2">
+                        <div class="print-col-40">
+                            <h6 class="fw-bold mb-2">📊 Kontribusi 3 Pilar</h6>
+                            <ul class="list-group list-group-flush mb-2 shadow-sm rounded border">
+                                <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
+                                    <span>🤖 Pilar I (XGBoost)</span><span class="badge bg-primary rounded-pill" id="val_ml">- %</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
+                                    <span>🩺 Pilar II (Klinis)</span><span class="badge bg-info rounded-pill text-dark" id="val_sym">- %</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
+                                    <span>📋 Pilar III (WHO)</span><span class="badge bg-secondary rounded-pill" id="val_who">- %</span>
+                                </li>
+                            </ul>
+                            
+                            <h6 class="fw-bold mb-2 mt-3">🧠 Patofisiologi (CLIX-M)</h6>
+                            <div id="clixTextContainer"></div>
+                        </div>
+                        
+                        <div class="print-col-60 text-center">
+                            <h6 class="fw-bold mb-2">Penjelasan Model (SHAP)</h6>
+                            <p class="text-muted small d-print-none">Bar merah mendorong probabilitas, bar biru mengurangi risiko.</p>
+                            <img id="shapImg" src="" alt="SHAP Plot" class="img-fluid border rounded shadow-sm">
+                        </div>
+                    </div>
+
+                    <!-- CATATAN FOOTER KHUSUS PRINT (Berada paling bawah tengah) -->
+                    <div class="d-none d-print-block mt-3 text-center w-100" style="border-top: 1px dashed #ccc; padding-top: 5px;">
+                        <i style="font-size: 0.6rem; color: #555;">Catatan: Dokumen ini merupakan hasil kalkulasi komputasional (skrining awal) dan hanya digunakan sebagai data rujukan sementara.</i>
+                    </div>
+
+                    <!-- TOMBOL AKSI WEB (Sembunyikan saat dicetak mutlak) -->
+                    <div class="row mt-4 border-top pt-4 d-print-none" id="actionButtons">
+                        <div class="col-12 text-center">
+                            <button class="btn btn-info text-white me-3 fw-bold px-4 rounded-pill shadow-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#slideKananKalkulasi">
+                                🧮 Cek Nilai Rasio (NLR/PLR)
+                            </button>
+                            <button class="btn btn-secondary fw-bold px-4 rounded-pill shadow-sm" onclick="window.print()">
+                                🖨️ Cetak Rekam Medis
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- KOMPONEN SLIDE KANAN (Web UI Only) -->
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="slideKananKalkulasi">
+        <div class="offcanvas-header bg-light border-bottom">
+            <h5 class="mb-0 text-primary fw-bold">🧮 Kalkulasi Fisiologis</h5>
+            <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas"></button>
+        </div>
+        <div class="offcanvas-body">
+            <p class="text-muted small mb-4">Fitur darah di bawah ini dihitung otomatis (AI Feature Engineering).</p>
+            <div id="tempat-kalkulasi-darah"></div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Script Pengolah Data API -->
+    <script>
+        document.getElementById('cdssForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnSubmit');
+            btn.innerText = "Menganalisis Data...";
+            btn.disabled = true;
+    
+            const getVal = (id) => { let v = document.getElementById(id).value; return v === "" ? null : parseFloat(v); };
+            const fmt = (val) => val !== null && val !== undefined && !isNaN(val) ? val : "-"; 
+    
+            const symptoms = Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+    
+            const payload = {
+                Gender: getVal('Gender'), Age: getVal('Age'), hb: getVal('hb'), rbc: getVal('rbc'), 
+                mcv: getVal('mcv'), rdw: getVal('rdw'), wbc: getVal('wbc'), neu: getVal('neu'), 
+                lym: getVal('lym'), mon: getVal('mon'), eos: getVal('eos'), plt: getVal('plt'), 
+                symptoms: symptoms,
+                weight_ml: getVal('w_ml'), weight_sym: getVal('w_sym'), weight_who: getVal('w_who')
+            };
+    
+            try {
+                const response = await fetch('/api/predict', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+    
+                if(result.status === "success"){
+                    document.getElementById('resultArea').style.display = "block";
+                    
+                    const diagText = document.getElementById('diagText');
+                    diagText.innerText = result.diagnosis;
+                    if(result.diagnosis === "Dengue/DBD" || result.diagnosis === "Thrombocytosis") { diagText.className = "display-5 fw-bold text-danger"; } 
+                    else if(result.diagnosis === "ITP") { diagText.className = "display-5 fw-bold text-warning"; } 
+                    else { diagText.className = "display-5 fw-bold text-success"; }
+
+                    document.getElementById('probText').innerText = result.probabilitas_final;
+                    document.getElementById('val_ml').innerText = result.breakdown.Pilar_1_ML + "%";
+                    document.getElementById('val_sym').innerText = result.breakdown.Pilar_2_Sym + "%";
+                    document.getElementById('val_who').innerText = result.breakdown.Pilar_3_WHO + "%";
+                    document.getElementById('shapImg').src = "data:image/png;base64," + result.shap_image;
+                    
+                    const clixContainer = document.getElementById('clixTextContainer');
+                    clixContainer.innerHTML = "";
+                    result.clix_m_text.forEach(text => {
+                        let htmlText = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+                        clixContainer.innerHTML += `<div class="clix-box">${htmlText}</div>`;
+                    });
+
+                    // --- GENERASI DATA UNTUK SLIDE KANAN & CETAK REKAM MEDIS ---
+                    if(result.kalkulasi_fisiologis) {
+                        const calcData = result.kalkulasi_fisiologis;
+                        
+                        // 1. Slide Kanan UI (List Group)
+                        let calcHTML = '<ul class="list-group list-group-flush shadow-sm rounded border">';
+                        for (const [namaFitur, nilaiFitur] of Object.entries(calcData)) {
+                            calcHTML += `<li class="list-group-item d-flex justify-content-between align-items-center py-2">
+                                            <span class="small fw-semibold text-secondary">${namaFitur}</span>
+                                            <span class="badge bg-primary rounded-pill">${nilaiFitur}</span>
+                                         </li>`;
+                        }
+                        calcHTML += '</ul>';
+                        document.getElementById('tempat-kalkulasi-darah').innerHTML = calcHTML;
+                        
+                        // 2. PEMBUATAN TABEL LAB CETAK (6 Kolom: Param | Nilai | Satuan)
+                        const dataTabel = [
+                            { p: "Umur", v: fmt(getVal('Age')), u: "Tahun" },
+                            { p: "Gender", v: getVal('Gender') !== null ? (getVal('Gender')===1 ? 'Laki-laki':'Perempuan') : "-", u: "-" },
+                            { p: "Hemoglobin (HB)", v: fmt(getVal('hb')), u: "g/dL" },
+                            { p: "Eritrosit (RBC)", v: fmt(getVal('rbc')), u: "10^6/µL" },
+                            { p: "Leukosit (WBC)", v: fmt(getVal('wbc')), u: "10^3/µL" },
+                            { p: "Trombosit (PLT)", v: fmt(getVal('plt')), u: "10^3/µL" },
+                            { p: "Hematokrit (HCT)", v: fmt(calcData["Hematokrit (HCT)"]), u: "%" },
+                            { p: "MCV", v: fmt(getVal('mcv')), u: "fL" },
+                            { p: "MCH", v: fmt(calcData["Mean Corpuscular Hemoglobin (MCH)"]), u: "pg" },
+                            { p: "MCHC", v: fmt(calcData["MCH Concentration (MCHC)"]), u: "g/dL" },
+                            { p: "RDW", v: fmt(getVal('rdw')), u: "%" },
+                            { p: "Neutrofil (%)", v: fmt(getVal('neu')), u: "%" },
+                            { p: "Limfosit (%)", v: fmt(getVal('lym')), u: "%" },
+                            { p: "Monosit (%)", v: fmt(getVal('mon')), u: "%" },
+                            { p: "Eosinofil (%)", v: fmt(getVal('eos')), u: "%" },
+                            { p: "Absolut Neutrofil", v: fmt(calcData["Absolut Neutrofil"]), u: "10^3/µL" },
+                            { p: "Absolut Limfosit", v: fmt(calcData["Absolut Limfosit"]), u: "10^3/µL" },
+                            { p: "Absolut Monosit", v: fmt(calcData["Absolut Monosit"]), u: "10^3/µL" },
+                            { p: "Absolut Eosinofil", v: fmt(calcData["Absolut Eosinofil"]), u: "10^3/µL" },
+                            { p: "NLR", v: fmt(calcData["Neutrophil-Lymphocyte Ratio (NLR)"]), u: "Rasio" },
+                            { p: "PLR", v: fmt(calcData["Platelet-Lymphocyte Ratio (PLR)"]), u: "Rasio" },
+                            { p: "MLR", v: fmt(calcData["Monocyte-Lymphocyte Ratio (MLR)"]), u: "Rasio" }
+                        ];
+
+                        let tbHTML = '<table class="table table-print table-sm text-start mb-2"><tbody>';
+                        for (let i = 0; i < dataTabel.length; i += 2) {
+                            tbHTML += `<tr>
+                                <th style="width: 20%;">${dataTabel[i].p}</th>
+                                <td style="width: 15%;" class="text-center">${dataTabel[i].v}</td>
+                                <td style="width: 15%; color: #555;" class="text-center">${dataTabel[i].u}</td>`;
+                            if (i + 1 < dataTabel.length) {
+                                tbHTML += `<th style="width: 20%; border-left: 2px solid #333 !important;">${dataTabel[i+1].p}</th>
+                                <td style="width: 15%;" class="text-center">${dataTabel[i+1].v}</td>
+                                <td style="width: 15%; color: #555;" class="text-center">${dataTabel[i+1].u}</td>`;
+                            } else { tbHTML += `<th style="border-left: 2px solid #333 !important;"></th><td></td><td></td>`; }
+                            tbHTML += `</tr>`;
+                        }
+                        tbHTML += '</tbody></table>';
+                        document.getElementById('tableLabInject').innerHTML = tbHTML;
+
+                        // 3. PEMBUATAN LIST GEJALA KLINIS CETAK
+                        let sympHTML = '<ul class="ps-3 mb-0">';
+                        if(symptoms.length > 0 && !symptoms.includes("Asimptomatik (tidak ada keluhan klinis)")) {
+                            symptoms.forEach(s => { sympHTML += `<li>${s}</li>`; });
+                        } else { sympHTML += '<li><i>Tidak ada gejala (Asimptomatik)</i></li>'; }
+                        sympHTML += '</ul>';
+                        document.getElementById('symptomsInject').innerHTML = sympHTML;
+
+                        // 4. PEMBUATAN TABEL VERIFIKASI WHO
+                        let plt = getVal('plt'); let wbc = getVal('wbc'); let hct = calcData["Hematokrit (HCT)"];
+                        let whoHTML = `<table class="table table-print table-sm text-center mb-0">
+                            <tr class="bg-light"><th>Kriteria Heuristik</th><th>Ambang Batas</th><th>Nilai Pasien</th><th>Status</th></tr>
+                            <tr><td class="text-start">Trombositopenia</td><td>< 100</td><td>${fmt(plt)}</td><td>${plt !== null && plt < 100 ? '✅ Ya' : '❌ Tdk'}</td></tr>
+                            <tr><td class="text-start">Leukopenia</td><td>< 5.0</td><td>${fmt(wbc)}</td><td>${wbc !== null && wbc < 5.0 ? '✅ Ya' : '❌ Tdk'}</td></tr>
+                            <tr><td class="text-start">Hemokonsentrasi</td><td>> 45%</td><td>${fmt(hct)}</td><td>${hct !== null && hct > 45 ? '✅ Ya' : '❌ Tdk'}</td></tr>
+                            <tr><td class="text-start">Trombositosis</td><td>> 450</td><td>${fmt(plt)}</td><td>${plt !== null && plt > 450 ? '✅ Ya' : '❌ Tdk'}</td></tr>
+                        </table>`;
+                        document.getElementById('whoInject').innerHTML = whoHTML;
+                    }
+
+                    document.getElementById('resultArea').scrollIntoView({ behavior: 'smooth' });
+                }
+            } catch (err) {
+                alert("Kesalahan koneksi ke server AI.");
+            } finally {
+                btn.innerText = "Eksekusi Fusi Analisis";
+                btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
