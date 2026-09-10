@@ -8,33 +8,41 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background-color: #f8f9fa; scroll-behavior: smooth; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .hero-section { background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%); color: white; padding: 100px 0 80px; }
-        .section-title { font-weight: 700; color: #2c3e50; margin-bottom: 40px; position: relative; padding-bottom: 15px; }
-        .section-title::after { content: ''; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 60px; height: 4px; background-color: #0d6efd; border-radius: 2px; }
+        
+        /* --- STYLING UI BARU UNTUK BERANDA, INFORMASI & PANDUAN --- */
+        .hero-section { background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%); color: white; padding: 120px 0 80px; position: relative; overflow: hidden;}
+        .hero-section::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: #f8f9fa; clip-path: polygon(0 100%, 100% 100%, 100% 0); }
+        .section-title { font-weight: 800; color: #2c3e50; margin-bottom: 40px; position: relative; padding-bottom: 15px; text-transform: uppercase; letter-spacing: 1px;}
+        .section-title::after { content: ''; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 80px; height: 4px; background: linear-gradient(90deg, #0d6efd, #0dcaf0); border-radius: 2px; }
+        
+        .info-card { background: white; border-radius: 16px; padding: 30px; height: 100%; box-shadow: 0 10px 30px rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.05); border-top: 5px solid #0d6efd; transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1); }
+        .info-card:hover { transform: translateY(-10px); box-shadow: 0 15px 35px rgba(13, 110, 253, 0.15); }
+        .info-card.warning-card { border-top: 5px solid #ffc107; }
+        .info-card.danger-card { border-top: 5px solid #dc3545; }
+        .info-icon { font-size: 2.5rem; margin-bottom: 20px; }
+        
+        .accordion-button:not(.collapsed) { background-color: #f1f7ff; color: #0d6efd; font-weight: bold; }
+        .step-box { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); text-align: center; position: relative; z-index: 1; border: 1px solid #eee;}
+        .step-circle { width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #0d6efd, #0dcaf0); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: bold; margin: -50px auto 15px; border: 5px solid #f8f9fa; box-shadow: 0 5px 15px rgba(13, 110, 253, 0.2); }
+
+        /* --- STYLING APLIKASI --- */
         .feature-card { background: white; border-radius: 12px; padding: 25px; height: 100%; box-shadow: 0 5px 15px rgba(0,0,0,0.05); border-top: 4px solid transparent; transition: all 0.3s ease; }
         .feature-card:hover { transform: translateY(-5px); border-top: 4px solid #0d6efd; box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
         .app-container { background: white; border-radius: 15px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
         .clix-box { background-color: #f1f4f9; border-left: 5px solid #0d6efd; padding: 15px; margin-bottom: 15px; border-radius: 0 8px 8px 0; font-size: 0.95rem;}
         #resultArea { display: none; }
-        .step-circle { width: 50px; height: 50px; border-radius: 50%; background-color: #0d6efd; color: white; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: bold; margin: 0 auto 15px; }
         
         /* --- CSS KHUSUS PRINT (1 HALAMAN REKAM MEDIS SUPER PADAT) --- */
         @media print {
-            /* 1. Sembunyikan elemen non-cetak mutlak */
             nav, #beranda, #informasi, #panduan, footer, #cdssForm, #actionButtons, .d-print-none { 
                 display: none !important; 
             }
-            
-            /* 2. Tarik ke atas & buang margin bawaan web */
-            @page { margin: 1cm; } /* Mempersempit margin kertas A4 */
+            @page { margin: 1cm; } 
             body, .app-container, #aplikasi, #resultArea {
                 margin: 0 !important; padding: 0 !important; box-shadow: none !important; border: none !important;
                 background-color: white !important; width: 100% !important;
             }
-            
             #resultArea { display: block !important; }
-            
-            /* 3. Pengecilan Font & Elemen Ekstrem */
             .display-5 { font-size: 1.3rem !important; margin-bottom: 0px !important; }
             h4 { font-size: 0.9rem !important; margin-bottom: 6px !important; }
             h5 { font-size: 0.75rem !important; margin-bottom: 4px !important; }
@@ -42,26 +50,13 @@
             .badge { font-size: 0.65rem !important; border: 1px solid #000; color: #000 !important; background: transparent !important; padding: 2px 5px !important;}
             .clix-box { padding: 3px 6px !important; font-size: 0.6rem !important; margin-bottom: 2px !important; border-left: 3px solid #000; background: #fff !important;}
             .list-group-item { padding: 2px 4px !important; font-size: 0.65rem !important; }
-            
-            /* 4. Tabel Cetak */
             .table-print { font-size: 0.6rem !important; margin-bottom: 8px !important; }
             .table-print td, .table-print th { padding: 1px 3px !important; border: 1px solid #333 !important; }
             .table-print th { background-color: #eee !important; -webkit-print-color-adjust: exact; }
-            
-            /* 5. TATA LETAK PARALEL PAKSA (nowrap agar gambar tidak terlempar ke bawah) */
-            .print-row { 
-                display: flex !important; 
-                flex-direction: row !important; 
-                flex-wrap: nowrap !important; /* Paksa agar tidak turun baris */
-                justify-content: space-between !important;
-                width: 100% !important; 
-                margin-bottom: 5px !important; 
-            }
+            .print-row { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; justify-content: space-between !important; width: 100% !important; margin-bottom: 5px !important; }
             .print-col-50 { width: 48% !important; display: block !important; }
             .print-col-40 { width: 38% !important; display: block !important; }
             .print-col-60 { width: 60% !important; display: block !important; }
-            
-            /* 6. Batas Gambar SHAP (Semakin kecil agar muat) */
             #shapImg { max-height: 155px !important; width: auto !important; margin: 0 auto; display: block; object-fit: contain;}
         }
     </style>
@@ -74,18 +69,136 @@
             <a class="navbar-brand fw-bold text-primary" href="#">🩺 Tri-Brid CDSS</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
+                <ul class="navbar-nav ms-auto fw-semibold">
                     <li class="nav-item"><a class="nav-link" href="#beranda">Beranda</a></li>
-                    <li class="nav-item"><a class="nav-link btn btn-primary text-white px-4 ms-2 rounded-pill" href="#aplikasi">Mulai CDSS</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#informasi">Informasi Klinis</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#panduan">Panduan</a></li>
+                    <li class="nav-item"><a class="nav-link btn btn-primary text-white px-4 ms-3 rounded-pill shadow-sm" href="#aplikasi">Mulai CDSS</a></li>
                 </ul>
             </div>
         </div>
     </nav>
 
-    <!-- SECTION APLIKASI UTAMA (FORM CDSS) -->
-    <section id="aplikasi" class="py-5 mt-5">
+    <!-- SECTION 1: HERO / BERANDA -->
+    <section id="beranda" class="hero-section text-center text-md-start">
         <div class="container">
-            <!-- Ditambahkan d-print-none agar judul ini HILANG saat diprint -->
+            <div class="row align-items-center">
+                <div class="col-lg-8 mx-auto text-center">
+                    <span class="badge bg-light text-primary rounded-pill px-3 py-2 mb-3 shadow-sm fw-bold">Skrining Hematologi V.2.0</span>
+                    <h1 class="display-4 fw-bolder mb-4">Sistem Pendukung Keputusan Klinis Tri-Brid</h1>
+                    <p class="lead mb-5 fw-normal" style="opacity: 0.95;">
+                        Mengintegrasikan kecerdasan buatan <strong>XGBoost, Explainable AI (SHAP), Gejala Klinis, dan Kriteria WHO</strong> untuk klasifikasi probabilistik gangguan trombosit: <i>ITP, Dengue (DBD), dan Trombositosis Reaktif</i>.
+                    </p>
+                    <a href="#aplikasi" class="btn btn-light btn-lg text-primary fw-bold px-5 py-3 rounded-pill shadow-lg me-3">Ruang Kerja Analisis</a>
+                    <a href="#informasi" class="btn btn-outline-light btn-lg fw-bold px-4 py-3 rounded-pill">Pelajari Sistem</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 2: INFORMASI & BATASAN (DISCLAIMER) -->
+    <section id="informasi" class="py-5">
+        <div class="container py-5">
+            <h2 class="text-center section-title">Karakteristik & Batasan Sistem</h2>
+            
+            <div class="row g-4 mt-2 mb-5">
+                <!-- Card 1 -->
+                <div class="col-lg-4">
+                    <div class="info-card text-center">
+                        <div class="info-icon text-primary">🔬</div>
+                        <h5 class="fw-bold text-dark mb-3">Ruang Lingkup Deteksi</h5>
+                        <p class="text-muted small">Model AI dilatih untuk membedakan 4 kelas target spesifik: <strong>Normal, Immune Thrombocytopenia (ITP), Infeksi Dengue/DBD, dan Trombositosis</strong> berdasarkan fitur-fitur dari darah rutin (CBC).</p>
+                    </div>
+                </div>
+                <!-- Card 2 -->
+                <div class="col-lg-4">
+                    <div class="info-card warning-card text-center">
+                        <div class="info-icon text-warning">⚠️</div>
+                        <h5 class="fw-bold text-dark mb-3">Batasan Parameter Lab</h5>
+                        <p class="text-muted small">Demi menjaga generalisasi perangkat mesin hitung konvensional, sistem ini <strong>tidak menggunakan Indeks Trombosit Lanjutan (MPV, PDW, PCT)</strong>. Analisis disubstitusi melalui kalkulasi rasio fisiologis (NLR, PLR, MLR).</p>
+                    </div>
+                </div>
+                <!-- Card 3 -->
+                <div class="col-lg-4">
+                    <div class="info-card danger-card text-center">
+                        <div class="info-icon text-danger">⚖️</div>
+                        <h5 class="fw-bold text-dark mb-3">Penafian Medis (Disclaimer)</h5>
+                        <p class="text-muted small">Hasil keluaran sistem merupakan <strong>skrining heuristik awal, BUKAN diagnosis definitif.</strong> Konfirmasi akhir wajib menggunakan tes serologi (IgG/IgM/NS1) atau aspirasi sumsum tulang oleh tenaga medis profesional.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rincian Kompleks dalam bentuk Accordion (Agar Padat & Rapi) -->
+            <div class="row">
+                <div class="col-lg-10 mx-auto">
+                    <h5 class="fw-bold mb-3 text-secondary text-center">Penjelasan Arsitektur Tri-Brid</h5>
+                    <div class="accordion shadow-sm" id="accordionInfo">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#col1">🤖 Pilar I: Machine Learning & Explainable AI</button></h2>
+                            <div id="col1" class="accordion-collapse collapse show" data-bs-parent="#accordionInfo">
+                                <div class="accordion-body text-muted small">
+                                    Pilar utama menggunakan algoritma <strong>eXtreme Gradient Boosting (XGBoost)</strong> yang diseleksi melalui uji stabilitas <i>Mutual Information</i>. Keputusan "Black-Box" dari model ini kemudian dipecahkan oleh <strong>SHAP (SHapley Additive exPlanations)</strong> untuk memetakan patofisiologi kausal (CLIX-M), memberikan transparansi mengapa probabilitas sebuah diagnosis meningkat atau menurun akibat parameter tertentu (misal: kebocoran plasma yang ditandai dengan naiknya HCT).
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordion-item">
+                            <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#col2">🩺 Pilar II & III: Gejala Klinis & Kriteria WHO</button></h2>
+                            <div id="col2" class="accordion-collapse collapse" data-bs-parent="#accordionInfo">
+                                <div class="accordion-body text-muted small">
+                                    <ul class="mb-0 ps-3">
+                                        <li class="mb-2"><strong>Pilar II (Sistem Pakar Klinis):</strong> Memverifikasi keluhan fisik pasien (seperti petekie, nyeri retro-orbital, demam akut) yang merupakan ciri khas endemik DBD maupun manifestasi perdarahan autoimun pada ITP.</li>
+                                        <li><strong>Pilar III (Heuristik WHO):</strong> Menggunakan aturan kaku (Hard-rules) dari Organisasi Kesehatan Dunia (contoh: Trombositopenia absolut jika PLT < 100.000, Hemokonsentrasi jika HCT > 45%) untuk bertindak sebagai fungsi penalti (*guardrail*) agar AI tidak memberikan diagnosis yang menyimpang dari standar baku medis.</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 3: PANDUAN PENGGUNAAN -->
+    <section id="panduan" class="py-5 bg-light">
+        <div class="container py-5">
+            <h2 class="text-center section-title">Prosedur Penggunaan</h2>
+            <div class="row g-4 mt-5 pt-3">
+                <div class="col-md-3">
+                    <div class="step-box">
+                        <div class="step-circle">1</div>
+                        <h6 class="fw-bold text-primary">Input Darah Rutin</h6>
+                        <p class="text-muted small mb-0">Masukkan angka dari hasil cetak lab darah rutin (CBC). Pastikan satuan sesuai dengan formulir.</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="step-box">
+                        <div class="step-circle">2</div>
+                        <h6 class="fw-bold text-primary">Seleksi Simtom</h6>
+                        <p class="text-muted small mb-0">Centang manifestasi klinis yang dialami pasien (atau pilih asimptomatik jika tidak ada keluhan).</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="step-box">
+                        <div class="step-circle">3</div>
+                        <h6 class="fw-bold text-primary">Kalibrasi Bobot</h6>
+                        <p class="text-muted small mb-0">Secara opsional, sesuaikan persentase pengaruh antar pilar. Total ideal tidak diwajibkan 100%.</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="step-box">
+                        <div class="step-circle">4</div>
+                        <h6 class="fw-bold text-primary">Cetak Dokumen</h6>
+                        <p class="text-muted small mb-0">Klik eksekusi fusi, analisis grafik SHAP, dan cetak halaman ini sebagai lampiran rekam medis.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 4: APLIKASI UTAMA (FORM CDSS) -->
+    <!-- (KODE APLIKASI SAMA PERSIS SEPERTI SEBELUMNYA) -->
+    <section id="aplikasi" class="py-5 mt-3">
+        <div class="container">
             <h2 class="text-center section-title d-print-none">Ruang Kerja CDSS</h2>
             
             <div class="app-container">
@@ -145,7 +258,7 @@
                         <h4 class="text-primary">Tingkat Keyakinan Prediksi: <span id="probText">-</span>%</h4>
                     </div>
 
-                    <!-- BLOK 1: TABEL LAB & KLINIS (Hanya Muncul Saat Print / Tersembunyi di Web) -->
+                    <!-- BLOK 1: TABEL LAB & KLINIS -->
                     <div id="printDataContainer" class="d-none d-print-block">
                         <h6 class="fw-bold mb-1 border-bottom pb-1">I. Data Laboratorium & Fisiologis Pasien</h6>
                         <div id="tableLabInject"></div>
@@ -163,7 +276,6 @@
                     </div>
                     
                     <!-- BLOK 2: HASIL AI & SHAP -->
-                    <!-- Dihapus class .row dan .col-lg-* agar bebas dari gangguan Grid Bootstrap saat Print -->
                     <div class="print-row mt-2">
                         <div class="print-col-40">
                             <h6 class="fw-bold mb-2">📊 Kontribusi 3 Pilar</h6>
@@ -190,12 +302,12 @@
                         </div>
                     </div>
 
-                    <!-- CATATAN FOOTER KHUSUS PRINT (Berada paling bawah tengah) -->
+                    <!-- CATATAN FOOTER KHUSUS PRINT -->
                     <div class="d-none d-print-block mt-3 text-center w-100" style="border-top: 1px dashed #ccc; padding-top: 5px;">
                         <i style="font-size: 0.6rem; color: #555;">Catatan: Dokumen ini merupakan hasil kalkulasi komputasional (skrining awal) dan hanya digunakan sebagai data rujukan sementara.</i>
                     </div>
 
-                    <!-- TOMBOL AKSI WEB (Sembunyikan saat dicetak mutlak) -->
+                    <!-- TOMBOL AKSI WEB -->
                     <div class="row mt-4 border-top pt-4 d-print-none" id="actionButtons">
                         <div class="col-12 text-center">
                             <button class="btn btn-info text-white me-3 fw-bold px-4 rounded-pill shadow-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#slideKananKalkulasi">
@@ -223,6 +335,14 @@
             <div id="tempat-kalkulasi-darah"></div>
         </div>
     </div>
+
+    <!-- FOOTER AKADEMIS -->
+    <footer class="bg-dark text-white text-center py-4 mt-5 no-print d-print-none">
+        <div class="container">
+            <p class="mb-0 small text-white-50">© 2026 Aplikasi Prototipe CDSS Hematologi.</p>
+            <p class="mb-0 small text-white-50">Dikembangkan untuk keperluan tugas akhir penelitian (Undergraduate Thesis) di Departemen Teknik Nuklir dan Fisika, Universitas Gadjah Mada.</p>
+        </div>
+    </footer>
 
     <!-- Bootstrap JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -276,11 +396,9 @@
                         clixContainer.innerHTML += `<div class="clix-box">${htmlText}</div>`;
                     });
 
-                    // --- GENERASI DATA UNTUK SLIDE KANAN & CETAK REKAM MEDIS ---
                     if(result.kalkulasi_fisiologis) {
                         const calcData = result.kalkulasi_fisiologis;
                         
-                        // 1. Slide Kanan UI (List Group)
                         let calcHTML = '<ul class="list-group list-group-flush shadow-sm rounded border">';
                         for (const [namaFitur, nilaiFitur] of Object.entries(calcData)) {
                             calcHTML += `<li class="list-group-item d-flex justify-content-between align-items-center py-2">
@@ -291,7 +409,6 @@
                         calcHTML += '</ul>';
                         document.getElementById('tempat-kalkulasi-darah').innerHTML = calcHTML;
                         
-                        // 2. PEMBUATAN TABEL LAB CETAK (6 Kolom: Param | Nilai | Satuan)
                         const dataTabel = [
                             { p: "Umur", v: fmt(getVal('Age')), u: "Tahun" },
                             { p: "Gender", v: getVal('Gender') !== null ? (getVal('Gender')===1 ? 'Laki-laki':'Perempuan') : "-", u: "-" },
@@ -333,7 +450,6 @@
                         tbHTML += '</tbody></table>';
                         document.getElementById('tableLabInject').innerHTML = tbHTML;
 
-                        // 3. PEMBUATAN LIST GEJALA KLINIS CETAK
                         let sympHTML = '<ul class="ps-3 mb-0">';
                         if(symptoms.length > 0 && !symptoms.includes("Asimptomatik (tidak ada keluhan klinis)")) {
                             symptoms.forEach(s => { sympHTML += `<li>${s}</li>`; });
@@ -341,7 +457,6 @@
                         sympHTML += '</ul>';
                         document.getElementById('symptomsInject').innerHTML = sympHTML;
 
-                        // 4. PEMBUATAN TABEL VERIFIKASI WHO
                         let plt = getVal('plt'); let wbc = getVal('wbc'); let hct = calcData["Hematokrit (HCT)"];
                         let whoHTML = `<table class="table table-print table-sm text-center mb-0">
                             <tr class="bg-light"><th>Kriteria Heuristik</th><th>Ambang Batas</th><th>Nilai Pasien</th><th>Status</th></tr>
