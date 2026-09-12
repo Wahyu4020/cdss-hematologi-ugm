@@ -87,7 +87,7 @@
                     <span class="badge bg-light text-primary rounded-pill px-3 py-2 mb-3 shadow-sm fw-bold">Skrining Hematologi V.2.0</span>
                     <h1 class="display-4 fw-bolder mb-4">Sistem Pendukung Keputusan Klinis Tri-Brid</h1>
                     <p class="lead mb-5 fw-normal" style="opacity: 0.95;">
-                        Mengintegrasikan kecerdasan buatan <strong>XGBoost, Explainable AI (SHAP), Gejala Klinis, dan Kriteria WHO</strong> untuk klasifikasi probabilistik gangguan trombosit: <i>ITP, Dengue (DBD), dan Trombositosis Reaktif</i>.
+                        Mengintegrasikan kecerdasan buatan <strong>Regresi Logistik, Explainable AI (SHAP), Gejala Klinis, dan Kriteria WHO</strong> untuk klasifikasi probabilistik gangguan trombosit: <i>ITP, Dengue (DBD), dan Trombositosis Reaktif</i>.
                     </p>
                     <a href="#aplikasi" class="btn btn-light btn-lg text-primary fw-bold px-5 py-3 rounded-pill shadow-lg me-3">Ruang Kerja Analisis</a>
                     <a href="#informasi" class="btn btn-outline-light btn-lg fw-bold px-4 py-3 rounded-pill">Pelajari Sistem</a>
@@ -102,7 +102,6 @@
             <h2 class="text-center section-title">Karakteristik & Batasan Sistem</h2>
             
             <div class="row g-4 mt-2 mb-5">
-                <!-- Card 1 -->
                 <div class="col-lg-4">
                     <div class="info-card text-center">
                         <div class="info-icon text-primary">🔬</div>
@@ -110,7 +109,6 @@
                         <p class="text-muted small">Model AI dilatih untuk membedakan 4 kelas target spesifik: <strong>Normal, Immune Thrombocytopenia (ITP), Infeksi Dengue/DBD, dan Trombositosis</strong> berdasarkan fitur-fitur dari darah rutin (CBC).</p>
                     </div>
                 </div>
-                <!-- Card 2 -->
                 <div class="col-lg-4">
                     <div class="info-card warning-card text-center">
                         <div class="info-icon text-warning">⚠️</div>
@@ -118,7 +116,6 @@
                         <p class="text-muted small">Demi menjaga generalisasi perangkat mesin hitung konvensional, sistem ini <strong>tidak menggunakan Indeks Trombosit Lanjutan (MPV, PDW, PCT)</strong>. Analisis disubstitusi melalui kalkulasi rasio fisiologis (NLR, PLR, MLR).</p>
                     </div>
                 </div>
-                <!-- Card 3 -->
                 <div class="col-lg-4">
                     <div class="info-card danger-card text-center">
                         <div class="info-icon text-danger">⚖️</div>
@@ -128,7 +125,7 @@
                 </div>
             </div>
 
-            <!-- Rincian Kompleks dalam bentuk Accordion (Agar Padat & Rapi) -->
+            <!-- Rincian Kompleks dalam bentuk Accordion -->
             <div class="row">
                 <div class="col-lg-10 mx-auto">
                     <h5 class="fw-bold mb-3 text-secondary text-center">Penjelasan Arsitektur Tri-Brid</h5>
@@ -137,7 +134,7 @@
                             <h2 class="accordion-header"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#col1">🤖 Pilar I: Machine Learning & Explainable AI</button></h2>
                             <div id="col1" class="accordion-collapse collapse show" data-bs-parent="#accordionInfo">
                                 <div class="accordion-body text-muted small">
-                                    Pilar utama menggunakan algoritma <strong>eXtreme Gradient Boosting (XGBoost)</strong> yang diseleksi melalui uji stabilitas <i>Mutual Information</i>. Keputusan "Black-Box" dari model ini kemudian dipecahkan oleh <strong>SHAP (SHapley Additive exPlanations)</strong> untuk memetakan patofisiologi kausal (CLIX-M), memberikan transparansi mengapa probabilitas sebuah diagnosis meningkat atau menurun akibat parameter tertentu (misal: kebocoran plasma yang ditandai dengan naiknya HCT).
+                                    Pilar utama menggunakan algoritma <strong>Regresi Logistik</strong> yang diseleksi melalui uji stabilitas <i>Mutual Information</i>. Keputusan "Black-Box" dari model ini kemudian dipecahkan oleh <strong>SHAP (SHapley Additive exPlanations)</strong> untuk memetakan patofisiologi kausal (CLIX-M), memberikan transparansi mengapa probabilitas sebuah diagnosis meningkat atau menurun akibat parameter tertentu (misal: kebocoran plasma yang ditandai dengan naiknya HCT).
                                 </div>
                             </div>
                         </div>
@@ -147,7 +144,7 @@
                                 <div class="accordion-body text-muted small">
                                     <ul class="mb-0 ps-3">
                                         <li class="mb-2"><strong>Pilar II (Sistem Pakar Klinis):</strong> Memverifikasi keluhan fisik pasien (seperti petekie, nyeri retro-orbital, demam akut) yang merupakan ciri khas endemik DBD maupun manifestasi perdarahan autoimun pada ITP.</li>
-                                        <li><strong>Pilar III (Heuristik WHO):</strong> Menggunakan aturan kaku (Hard-rules) dari Organisasi Kesehatan Dunia (contoh: Trombositopenia absolut jika PLT < 100.000, Hemokonsentrasi jika HCT > 45%) untuk bertindak sebagai fungsi penalti (*guardrail*) agar AI tidak memberikan diagnosis yang menyimpang dari standar baku medis.</li>
+                                        <li><strong>Pilar III (Heuristik WHO):</strong> Menggunakan aturan kaku (Hard-rules) dari Organisasi Kesehatan Dunia (contoh: Trombositopenia absolut jika PLT &lt; 100.000, Hemokonsentrasi jika HCT &gt; 45%) untuk bertindak sebagai fungsi penalti (*guardrail*) agar AI tidak memberikan diagnosis yang menyimpang dari standar baku medis.</li>
                                     </ul>
                                 </div>
                             </div>
@@ -196,7 +193,6 @@
     </section>
 
     <!-- SECTION 4: APLIKASI UTAMA (FORM CDSS) -->
-    <!-- (KODE APLIKASI SAMA PERSIS SEPERTI SEBELUMNYA) -->
     <section id="aplikasi" class="py-5 mt-3">
         <div class="container">
             <h2 class="text-center section-title d-print-none">Ruang Kerja CDSS</h2>
@@ -284,15 +280,16 @@
                     <!-- BLOK 2: HASIL AI & SHAP -->
                     <div class="print-row mt-2">
                         <div class="print-col-40">
-                            <h6 class="fw-bold mb-2">📊 Kontribusi 3 Pilar</h6>
+                            <h6 class="fw-bold mb-2">📊 Kontribusi Pilar</h6>
                             <ul class="list-group list-group-flush mb-2 shadow-sm rounded border">
-                                <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
-                                    <span>🤖 Pilar I (XGBoost)</span><span class="badge bg-primary rounded-pill" id="val_ml">- %</span>
+                                <!-- ID DITAMBAHKAN PADA SETIAP CONTAINER PILAR -->
+                                <li id="pilar-1-container" class="list-group-item d-flex justify-content-between align-items-center bg-light">
+                                    <span>🤖 Pilar I (Regresi Logistik)</span><span class="badge bg-primary rounded-pill" id="val_ml">- %</span>
                                 </li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
+                                <li id="pilar-2-container" class="list-group-item d-flex justify-content-between align-items-center bg-light">
                                     <span>🩺 Pilar II (Klinis)</span><span class="badge bg-info rounded-pill text-dark" id="val_sym">- %</span>
                                 </li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
+                                <li id="pilar-3-container" class="list-group-item d-flex justify-content-between align-items-center bg-light">
                                     <span>📋 Pilar III (WHO)</span><span class="badge bg-secondary rounded-pill" id="val_who">- %</span>
                                 </li>
                             </ul>
@@ -390,9 +387,32 @@
                     else { diagText.className = "display-5 fw-bold text-success"; }
 
                     document.getElementById('probText').innerText = result.probabilitas_final;
-                    document.getElementById('val_ml').innerText = result.breakdown.Pilar_1_ML + "%";
-                    document.getElementById('val_sym').innerText = result.breakdown.Pilar_2_Sym + "%";
-                    document.getElementById('val_who').innerText = result.breakdown.Pilar_3_WHO + "%";
+                    
+                    // --- ➡️ LOGIKA BARU: MENYEMBUNYIKAN PILAR JIKA BOBOT 0 ---
+                    const breakdown = result.breakdown;
+                    
+                    if (breakdown.hasOwnProperty("Pilar_1_ML")) {
+                        document.getElementById("pilar-1-container").style.display = "flex";
+                        document.getElementById('val_ml').innerText = breakdown.Pilar_1_ML + "%";
+                    } else {
+                        document.getElementById("pilar-1-container").style.display = "none";
+                    }
+                    
+                    if (breakdown.hasOwnProperty("Pilar_2_Sym")) {
+                        document.getElementById("pilar-2-container").style.display = "flex";
+                        document.getElementById('val_sym').innerText = breakdown.Pilar_2_Sym + "%";
+                    } else {
+                        document.getElementById("pilar-2-container").style.display = "none";
+                    }
+                    
+                    if (breakdown.hasOwnProperty("Pilar_3_WHO")) {
+                        document.getElementById("pilar-3-container").style.display = "flex";
+                        document.getElementById('val_who').innerText = breakdown.Pilar_3_WHO + "%";
+                    } else {
+                        document.getElementById("pilar-3-container").style.display = "none";
+                    }
+                    // --------------------------------------------------------
+
                     document.getElementById('shapImg').src = "data:image/png;base64," + result.shap_image;
                     
                     const clixContainer = document.getElementById('clixTextContainer');
