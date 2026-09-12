@@ -81,6 +81,7 @@ def serve_frontend():
     return FileResponse("index.html")
 
 # ─── SCHEMA INPUT DARI WEB ───────────────────────────────────────────────────
+# ─── SCHEMA INPUT DARI WEB ───────────────────────────────────────────────────
 class PatientInput(BaseModel):
     Gender: Optional[str] = None
     Age: Optional[str] = None
@@ -94,10 +95,10 @@ class PatientInput(BaseModel):
     mon: Optional[str] = None
     eos: Optional[str] = None
     plt: Optional[str] = None
-    symptoms: List[str] = []
-    weight_ml: float = 55.0
-    weight_sym: float = 25.0
-    weight_who: float = 20.0
+    symptoms: Optional[List[str]] = [] # Diubah agar kebal jika frontend mengirim null
+    weight_ml: Optional[str] = "55.0"  # Diubah ke string agar kebal terhadap input teks kosong
+    weight_sym: Optional[str] = "25.0"
+    weight_who: Optional[str] = "20.0"
 
 # ─── FUNGSI LOGIKA ───────────────────────────────
 def pillar_iii_who_rules(plt_val, wbc_val, hct_val):
@@ -293,10 +294,21 @@ def predict_diagnosis(data: PatientInput):
         
         # 7. Fusi Tri-Brid CDSS (Evaluasi Gejala & Aturan WHO)
         hct_calc = float(engineered_df['HCT'].iloc[0]) if pd.notna(engineered_df['HCT'].iloc[0]) else np.nan
-        p_sym = pillar_ii_symptom_score(data.symptoms)
+        
+        # Pengamanan jika symptoms dikirim sebagai None
+        safe_symptoms = data.symptoms if data.symptoms is not None else []
+        p_sym = pillar_ii_symptom_score(safe_symptoms)
+        
         p_who = pillar_iii_who_rules(raw_dict["plt"], raw_dict["wbc"], hct_calc)
         
-        w_ml, w_sym, w_who = data.weight_ml/100.0, data.weight_sym/100.0, data.weight_who/100.0
+        # Konversi paksa string dari frontend ke float dengan nilai default
+        try: w_ml = float(data.weight_ml) / 100.0
+        except: w_ml = 0.55
+        try: w_sym = float(data.weight_sym) / 100.0
+        except: w_sym = 0.25
+        try: w_who = float(data.weight_who) / 100.0
+        except: w_who = 0.20
+        
         p_final = (w_ml * p_ml) + (w_sym * p_sym) + (w_who * p_who)
         if p_final.sum() > 0: p_final = p_final / p_final.sum()
         
