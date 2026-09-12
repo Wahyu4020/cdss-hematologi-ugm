@@ -174,7 +174,7 @@ def predict_diagnosis(data: PatientInput):
         final_df = pd.DataFrame(imputed_data, columns=expected_features)
         
         # 5. Filter Spesifik 10 Fitur Model Regresi Logistik
-        target_features = ['PLT', 'Umur', 'PLR', 'MCV', 'MCH', 'ABS_EOS', 'ABS_NEU', 'WBC', 'RBC', 'ABS_MON']
+        target_features = ['PLT', 'MCV', 'PLR', 'HCT', 'HB', 'WBC', 'ABS_NEU', 'RDW', 'ABS_EOS', 'NLR']
         ml_features = [exp_col for tf in target_features for exp_col in expected_features if tf.lower() == exp_col.lower()]
         ml_input_df = final_df[ml_features]
         
