@@ -127,14 +127,104 @@ def pillar_ii_symptom_score(selected_symptoms):
     if raw.sum() > 0: return raw / raw.sum()
     return np.ones(4) / 4.0
 
-def get_detailed_explanation(feature_name, shap_value, pred_class):
-    direction = "mendorong kuat ke arah" if shap_value > 0 else "menahan/mengurangi risiko"
+def get_detailed_explanation(feature_name, shap_value, pred_class, raw_val):
+    direction = "mendorong ke arah" if shap_value > 0 else "menahan/mengurangi risiko"
     feat_upper = feature_name.upper()
-    if feature_name.lower() == "plt":
-        if shap_value > 0 and pred_class in [1, 2]: return f"**Trombosit (PLT):** Penurunan ekstrem parameter ini {direction} diagnosis. Secara patofisiologis, ini merepresentasikan destruksi perifer akut atau supresi produksi."
-        elif shap_value > 0 and pred_class == 3: return f"**Trombosit (PLT):** Lonjakan masif nilai absolut trombosit {direction} diagnosis. Hal ini mencerminkan aktivitas megakaryopoiesis otonom."
-    return f"**{feat_upper}:** Berkontribusi memicu batas ambang (threshold) dalam {direction} keputusan diagnosis ini."
+    
+    # Cetak nama fitur beserta nilai aslinya di UI
+    base_text = f"**{feat_upper} ({round(raw_val, 2)}):** Nilai ini {direction} keputusan diagnosis."
+    
+    # ─── LOGIKA PLT (TROMBOSIT) ───
+    if feat_upper == "PLT":
+        if raw_val < 150:
+            if pred_class == 1: # ITP
+                return base_text + " Penurunan trombosit (trombositopenia) terisolasi merupakan tanda khas ITP (Immune Thrombocytopenia), di mana sistem imun secara keliru menghancurkan keping darah tanpa penyebab infeksi yang jelas."
+            elif pred_class == 2: # DENGUE
+                return base_text + " Penurunan trombosit sangat lazim pada infeksi virus Dengue akibat supresi sumsum tulang secara langsung oleh virus dan destruksi keping darah di sirkulasi perifer."
+            else:
+                return base_text + " Penurunan keping darah mengindikasikan adanya gangguan produksi pada sumsum tulang atau tingginya tingkat destruksi perifer."
+        elif raw_val > 450:
+            if pred_class == 3: # TROMBOSITOSIS
+                return base_text + " Produksi trombosit yang berlebihan (trombositosis) mengonfirmasi hiperaktivitas sumsum tulang, yang berpotensi merujuk pada kelainan mieloproliferatif."
+            else:
+                return base_text + " Peningkatan keping darah di atas rentang fisiologis menandakan adanya anomali pada aktivitas produksi megakariosit di dalam sumsum tulang."
+                
+    # ─── LOGIKA WBC (LEUKOSIT) ───
+    elif feat_upper == "WBC":
+        if raw_val < 4.0:
+            if pred_class == 2: # DENGUE
+                return base_text + " Penurunan sel darah putih (leukopenia) merupakan penanda awal yang sangat khas pada fase akut infeksi virus seperti Dengue."
+            else:
+                return base_text + " Leukopenia dapat terjadi akibat penyakit penekanan imun, malnutrisi, toksisitas obat, atau supresi sumsum tulang."
+        elif raw_val > 11.0:
+            return base_text + " Peningkatan sel darah putih (leukositosis) menandakan respons imun tubuh yang aktif untuk melawan infeksi bakteri atau inflamasi hebat."
+        else:
+            if pred_class == 1: # ITP
+                return base_text + " Pada ITP, kelainan hematologi umumnya murni hanya terjadi pada keping darah, sehingga nilai WBC yang normal ini turut memperkuat tegaknya diagnosis ITP."
+            return base_text + " Jumlah leukosit yang berada dalam rentang fisiologis menandakan produksi sel imun bawaan tidak mengalami gangguan."
 
+    # ─── LOGIKA RBC (ERITROSIT) ───
+    elif feat_upper == "RBC":
+        if raw_val > 5.5 and pred_class == 2: # DENGUE
+            return base_text + " Peningkatan eritrosit (hemokonsentrasi) merupakan tanda bahaya (danger sign) pada Dengue yang menunjukkan adanya sindrom kebocoran plasma darah."
+        elif raw_val < 4.0:
+            return base_text + " Penurunan eritrosit merupakan penanda kondisi anemia, riwayat perdarahan, atau gangguan produksi sel darah merah."
+            
+    # ─── LOGIKA INDEKS ERITROSIT REDUNDAN (MCV, MCH, MCHC) ───
+    elif feat_upper == "MCV":
+        redundansi_mcv = " Sebagai parameter turunan, MCV merupakan cerminan matematis dari rasio antara Hematokrit (HCT) dan jumlah absolut eritrosit (RBC)."
+        if raw_val < 80:
+            return base_text + redundansi_mcv + " MCV yang rendah (mikrositik) sering menjadi rujukan adanya penyakit penyerta seperti anemia defisiensi besi atau talasemia."
+        elif raw_val > 100:
+            return base_text + redundansi_mcv + " MCV yang tinggi (makrositik) mengindikasikan kemungkinan defisiensi vitamin B12/folat atau penyakit hati."
+        else:
+            return base_text + redundansi_mcv + " Nilai dalam rentang normal menunjukkan ukuran sel darah merah yang proporsional (normositik)."
+            
+    elif feat_upper == "MCH":
+        redundansi_mch = " Secara fisiologis, parameter ini berkorelasi langsung dengan perhitungan rasio massa Hemoglobin (HB) terhadap jumlah eritrosit (RBC)."
+        if raw_val < 27:
+            return base_text + redundansi_mch + " Nilai MCH yang rendah merepresentasikan sel darah merah yang hipokromik (pucat) karena kekurangan kadar hemoglobin intraseluler."
+        else:
+            return base_text + redundansi_mch + " Kepadatan hemoglobin per sel darah merah terpantau berada dalam batas wajar."
+            
+    elif feat_upper == "MCHC":
+        redundansi_mchc = " Indeks ini merupakan kalkulasi redundan dari perbandingan antara kadar Hemoglobin (HB) dan persentase Hematokrit (HCT)."
+        if raw_val < 32:
+            return base_text + redundansi_mchc + " Penurunan konsentrasi ini mengonfirmasi kondisi hipokromia pada eritrosit pasien."
+        else:
+            return base_text + redundansi_mchc + " Konsentrasi hemoglobin intraseluler terpantau seimbang dengan volume sel darah merah (normokromik)."
+
+    # ─── LOGIKA DIFERENSIAL LEUKOSIT ───
+    elif feat_upper == "ABS_LYM":
+        if pred_class == 2: # DENGUE
+            return base_text + " Fluktuasi limfosit secara klinis erat kaitannya dengan mobilisasi sistem imunitas adaptif untuk merespons replikasi virus Dengue di dalam tubuh."
+        else:
+            return base_text + " Limfosit berperan penting dalam kekebalan humoral untuk merespons penyakit virus atau inflamasi imunologis."
+            
+    elif feat_upper == "ABS_NEU":
+        if raw_val < 2.0 and pred_class == 2: # DENGUE
+            return base_text + " Penurunan neutrofil (neutropenia) sering menyertai fase akut infeksi virus akibat supresi sementara pada sumsum tulang."
+        elif raw_val > 7.5:
+            return base_text + " Peningkatan neutrofil (neutrofilia) adalah respons garda terdepan terhadap adanya infeksi bakteri piogenik atau trauma jaringan."
+            
+    elif feat_upper == "ABS_MON":
+        return base_text + " Monosit bertindak sebagai fagosit pembersih; peningkatannya sering terlihat pada fase pemulihan infeksi akut atau peradangan kronis."
+        
+    elif feat_upper == "ABS_EOS":
+        return base_text + " Fluktuasi eosinofil merupakan respons biologis yang lazim pada reaksi alergi, infeksi parasit, atau dermatitis atopik."
+        
+    # ─── LOGIKA RASIO INFLAMASI REDUNDAN (NLR, PLR, MLR) ───
+    elif feat_upper in ["NLR", "PLR", "MLR"]:
+        if feat_upper == "NLR":
+            korelasi_rasio = " Rasio ini secara langsung diturunkan dari perbandingan nilai absolut Neutrofil terhadap Limfosit."
+        elif feat_upper == "PLR":
+            korelasi_rasio = " Rasio ini secara langsung diturunkan dari perbandingan jumlah absolut Trombosit (PLT) terhadap Limfosit."
+        else:
+            korelasi_rasio = " Rasio ini secara langsung diturunkan dari perbandingan nilai absolut Monosit terhadap Limfosit."
+            
+        return base_text + korelasi_rasio + " Fitur turunan antar-sel darah ini digunakan oleh model sebagai biomarker prediktif tambahan untuk menilai derajat keparahan inflamasi sistemik secara komprehensif."
+        
+    return base_text
 # ─── ENDPOINT UTAMA ──────────────────────────────────────────────────────────
 @app.post("/api/predict")
 def predict_diagnosis(data: PatientInput):
