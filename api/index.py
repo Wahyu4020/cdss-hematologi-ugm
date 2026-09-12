@@ -378,16 +378,18 @@ def predict_diagnosis(data: PatientInput):
             "Platelet-Lymphocyte Ratio (PLR)": safe_round(engineered_df['PLR'].iloc[0]),
             "Monocyte-Lymphocyte Ratio (MLR)": safe_round(engineered_df['MLR'].iloc[0])
         }
+        
+        # ➡️ PERBAIKAN: Breakdown Dinamis berdasarkan input bobot (Weight)
+        breakdown_dict = {}
+        if w_ml > 0: breakdown_dict["Pilar_1_ML"] = round(float(p_ml[pred_class]*100), 2)
+        if w_sym > 0: breakdown_dict["Pilar_2_Sym"] = round(float(p_sym[pred_class]*100), 2)
+        if w_who > 0: breakdown_dict["Pilar_3_WHO"] = round(float(p_who[pred_class]*100), 2)
             
         return {
             "status": "success",
             "diagnosis": CLASS_NAMES[pred_class],
             "probabilitas_final": round(float(p_final[pred_class]*100), 2),
-            "breakdown": {
-                "Pilar_1_ML": round(float(p_ml[pred_class]*100), 2),
-                "Pilar_2_Sym": round(float(p_sym[pred_class]*100), 2),
-                "Pilar_3_WHO": round(float(p_who[pred_class]*100), 2),
-            },
+            "breakdown": breakdown_dict, # Hanya berisi pilar yang bobotnya > 0
             "shap_image": image_base64,
             "clix_m_text": explanations,
             "kalkulasi_fisiologis": calc_results 
