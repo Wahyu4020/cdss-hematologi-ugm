@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Union
 from sklearn.base import BaseEstimator, TransformerMixin
 import joblib
 import shap
@@ -82,23 +82,24 @@ def serve_frontend():
 
 # ─── SCHEMA INPUT DARI WEB ───────────────────────────────────────────────────
 # ─── SCHEMA INPUT DARI WEB ───────────────────────────────────────────────────
+# ─── SCHEMA INPUT DARI WEB ───────────────────────────────────────────────────
 class PatientInput(BaseModel):
-    Gender: Optional[str] = None
-    Age: Optional[str] = None
-    hb: Optional[str] = None
-    rbc: Optional[str] = None
-    mcv: Optional[str] = None
-    rdw: Optional[str] = None
-    wbc: Optional[str] = None
-    neu: Optional[str] = None
-    lym: Optional[str] = None
-    mon: Optional[str] = None
-    eos: Optional[str] = None
-    plt: Optional[str] = None
-    symptoms: Optional[List[str]] = [] # Diubah agar kebal jika frontend mengirim null
-    weight_ml: Optional[str] = "55.0"  # Diubah ke string agar kebal terhadap input teks kosong
-    weight_sym: Optional[str] = "25.0"
-    weight_who: Optional[str] = "20.0"
+    Gender: Union[float, str, None] = None
+    Age: Union[float, str, None] = None
+    hb: Union[float, str, None] = None
+    rbc: Union[float, str, None] = None
+    mcv: Union[float, str, None] = None
+    rdw: Union[float, str, None] = None
+    wbc: Union[float, str, None] = None
+    neu: Union[float, str, None] = None
+    lym: Union[float, str, None] = None
+    mon: Union[float, str, None] = None
+    eos: Union[float, str, None] = None
+    plt: Union[float, str, None] = None
+    symptoms: Optional[List[str]] = []
+    weight_ml: Union[float, str, None] = 55.0
+    weight_sym: Union[float, str, None] = 25.0
+    weight_who: Union[float, str, None] = 20.0
 
 # ─── FUNGSI LOGIKA ───────────────────────────────
 def pillar_iii_who_rules(plt_val, wbc_val, hct_val):
