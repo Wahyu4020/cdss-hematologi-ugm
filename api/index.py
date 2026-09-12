@@ -5,6 +5,7 @@ from typing import List, Optional
 from sklearn.base import BaseEstimator, TransformerMixin
 import joblib
 import shap
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -12,11 +13,11 @@ import io
 import base64
 import traceback
 
-# ─── CLASS TRANSFORMER (Wajib Dideklarasikan Agar PKL Bisa Dimuat) ───────────
+# ─── CLASS TRANSFORMER ───────────────────────────────────────────────────────
 class CBCCalculatorTransformer(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         self.output_features_ = [
-            'Gender', 'Age', 'hb', 'rbc', 'hct', 'mcv', 'mch', 'mchc', 'rdw','plt', 'wbc', 'abs_neu', 'abs_lym', 'abs_mon', 'abs_eos', 'nlr', 'plr', 'mlr'
+            'gender', 'age', 'hb', 'rbc', 'hct', 'mcv', 'mch', 'mchc', 'rdw','plt', 'wbc', 'abs_neu', 'abs_lym', 'abs_mon', 'abs_eos', 'nlr', 'plr', 'mlr'
         ]
         return self
 
@@ -39,7 +40,6 @@ app = FastAPI()
 
 CLASS_NAMES = ["Normal", "ITP", "Dengue/DBD", "Thrombocytosis"]
 
-# ➡️ PERUBAHAN: Matriks 14 Gejala Klinis Terbaru
 SYMPTOM_WEIGHTS = {
     "Demam tinggi mendadak (2-7 hari)": [0.0, 0.0, 0.85, 0.0],
     "Nyeri pegal hebat di belakang mata, otot, dan sendi": [0.0, 0.0, 0.75, 0.0],
@@ -57,13 +57,22 @@ SYMPTOM_WEIGHTS = {
     "Asimptomatik (tidak ada keluhan klinis)": [0.50, 0.0, 0.0, 0.0]
 }
 
+# Mapping Pintar untuk menjembatani Frontend ke Model Machine Learning
+MAP_WEB_TO_DATASET = {
+    'gender': 'L/P', 'age': 'Umur', 'hb': 'HB', 'rbc': 'RBC', 'mcv': 'MCV',
+    'rdw': 'RDW', 'wbc': 'WBC', 'plt': 'PLT', 'neu': 'NEU%', 'lym': 'LYM%',
+    'mon': 'MON%', 'eos': 'EOS%', 'hct': 'HCT', 'mch': 'MCH', 'mchc': 'MCHC',
+    'abs_neu': 'ABS_NEU', 'abs_lym': 'ABS_LYM', 'abs_mon': 'ABS_MON', 
+    'abs_eos': 'ABS_EOS', 'nlr': 'NLR', 'plr': 'PLR', 'mlr': 'MLR'
+}
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 try:
-    # ➡️ PERUBAHAN: Load 100% menggunakan Pickle/Joblib (Termasuk Model ML)
-    # Pastikan nama file ini sesuai dengan yang diekstrak dari skrip Colab Anda
-    scaler = joblib.load("std_scaler.pkl") 
-    imputer = joblib.load("knn_imputer.pkl")
-    ml_model = joblib.load("lr_model.pkl") 
-    print("✅ Seluruh model (.pkl) berhasil dimuat!")
+    scaler = joblib.load(os.path.join(BASE_DIR, "std_scaler.pkl"))
+    imputer = joblib.load(os.path.join(BASE_DIR, "knn_imputer.pkl"))
+    ml_model = joblib.load(os.path.join(BASE_DIR, "lr_model.pkl"))
+    print("✅ Model berhasil dimuat!")
 except Exception as e:
     print(f"❌ Error loading models: {e}")
 
@@ -113,11 +122,8 @@ def pillar_ii_symptom_score(selected_symptoms):
     for symptom in selected_symptoms: 
         if symptom in SYMPTOM_WEIGHTS:
             raw += np.array(SYMPTOM_WEIGHTS[symptom])
-            
-    # Tangani Asimptomatik secara absolut
     if "Asimptomatik (tidak ada keluhan klinis)" in selected_symptoms or raw.sum() == 0:
         return np.array(SYMPTOM_WEIGHTS["Asimptomatik (tidak ada keluhan klinis)"])
-        
     if raw.sum() > 0: return raw / raw.sum()
     return np.ones(4) / 4.0
 
@@ -127,76 +133,59 @@ def get_detailed_explanation(feature_name, shap_value, pred_class):
     if feature_name.lower() == "plt":
         if shap_value > 0 and pred_class in [1, 2]: return f"**Trombosit (PLT):** Penurunan ekstrem parameter ini {direction} diagnosis. Secara patofisiologis, ini merepresentasikan destruksi perifer akut atau supresi produksi."
         elif shap_value > 0 and pred_class == 3: return f"**Trombosit (PLT):** Lonjakan masif nilai absolut trombosit {direction} diagnosis. Hal ini mencerminkan aktivitas megakaryopoiesis otonom."
-    elif feature_name.lower() == "abs_lym" and pred_class == 2:
-        return f"**Absolute Lymphocyte (ABS_LYM):** Fluktuasi limfosit absolut {direction} diagnosis, menangkap mobilisasi imunitas adaptif fase kritis replikasi virus."
     return f"**{feat_upper}:** Berkontribusi memicu batas ambang (threshold) dalam {direction} keputusan diagnosis ini."
 
 # ─── ENDPOINT UTAMA ──────────────────────────────────────────────────────────
 @app.post("/api/predict")
 def predict_diagnosis(data: PatientInput):
     try:
-        # 1. Konversi Input ke DataFrame
         if hasattr(data, "model_dump"):
             raw_dict = data.model_dump(exclude={"symptoms", "weight_ml", "weight_sym", "weight_who"})
         else:
             raw_dict = data.dict(exclude={"symptoms", "weight_ml", "weight_sym", "weight_who"})
             
-        raw_dict = {k: (np.nan if v is None else v) for k, v in raw_dict.items()}
+        # Mengubah key ke lowercase agar konsisten
+        raw_dict = {k.lower(): (np.nan if v is None else v) for k, v in raw_dict.items()}
         raw_df = pd.DataFrame([raw_dict])
         
-        # 2. Rekayasa Fitur Otomatis
+        # 1. Kalkulasi Fisiologis
         cbc_calc = CBCCalculatorTransformer()
         cbc_calc.fit(raw_df) 
         engineered_df = cbc_calc.transform(raw_df)
         
-        # --- PENYELARASAN BENTUK DATA SCALER ---
+        # 2. Penyelarasan Nama Kolom (Mencegah Bug 'Umur' dan Data Hilang)
+        engineered_df.columns = [c.lower() for c in engineered_df.columns]
+        engineered_df = engineered_df.rename(columns=MAP_WEB_TO_DATASET)
+        
+        # 3. Penyelarasan Skala Data
         expected_features = list(scaler.feature_names_in_)
         aligned_df = pd.DataFrame(columns=expected_features)
         aligned_df.loc[0] = np.nan
         
-        web_cols = list(engineered_df.columns)
-        web_cols_upper = [c.upper() for c in web_cols]
-        
         for expected_col in expected_features:
-            exp_upper = expected_col.upper()
-            if exp_upper in web_cols_upper:
-                idx = web_cols_upper.index(exp_upper)
-                aligned_df.at[0, expected_col] = engineered_df.iloc[0, idx]
-            else:
-                exp_clean = exp_upper.replace("%", "")
-                if exp_clean in web_cols_upper:
-                    idx = web_cols_upper.index(exp_clean)
-                    aligned_df.at[0, expected_col] = engineered_df.iloc[0, idx]
-                    
+            if expected_col in engineered_df.columns:
+                aligned_df.at[0, expected_col] = engineered_df.iloc[0][expected_col]
+        
         aligned_df = aligned_df.fillna(0)
         
-        # 3. Pra-pemrosesan Terpisah
+        # 4. Scaling dan Imputasi
         scaled_data = scaler.transform(aligned_df)
         imputed_data = imputer.transform(scaled_data)
         final_df = pd.DataFrame(imputed_data, columns=expected_features)
         
-        # --- FILTER FITUR KHUSUS REGRESI LOGISTIK (LASSO) ---
-        # ⚠️ PENTING: Ganti isi list ini dengan 10 fitur spesifik yang dihasilkan dari LASSO L1 Anda.
+        # 5. Filter Spesifik 10 Fitur Model Regresi Logistik
         target_features = ['PLT', 'Umur', 'PLR', 'MCV', 'MCH', 'ABS_EOS', 'ABS_NEU', 'WBC', 'RBC', 'ABS_MON']
-        
-        ml_features = []
-        for tf in target_features:
-            for exp_col in expected_features:
-                if tf.lower() == exp_col.lower():
-                    ml_features.append(exp_col)
-                    break
-        
+        ml_features = [exp_col for tf in target_features for exp_col in expected_features if tf.lower() == exp_col.lower()]
         ml_input_df = final_df[ml_features]
-        # -----------------------------------
         
-        # 4. Prediksi Machine Learning
+        # 6. Prediksi Machine Learning
         p_ml = ml_model.predict_proba(ml_input_df)[0]
         if len(p_ml) > 4: p_ml = p_ml[:4]
         if len(p_ml) < 4: p_ml = np.pad(p_ml, (0, 4 - len(p_ml)))
         p_ml = p_ml / p_ml.sum()
         
-        # 5. Fusi Tri-Brid
-        hct_calc = float(engineered_df['hct'].iloc[0])
+        # 7. Fusi Tri-Brid CDSS (Evaluasi Gejala & Aturan WHO)
+        hct_calc = float(engineered_df['HCT'].iloc[0])
         p_sym = pillar_ii_symptom_score(data.symptoms)
         p_who = pillar_iii_who_rules(raw_dict["plt"], raw_dict["wbc"], hct_calc)
         
@@ -206,23 +195,24 @@ def predict_diagnosis(data: PatientInput):
         
         pred_class = int(np.argmax(p_final))
         
-        # 6. Analisis SHAP (Disesuaikan untuk Regresi Logistik)
-        explainer = shap.Explainer(ml_model, ml_input_df)
-        shap_explanation = explainer(ml_input_df)
+        # 8. Analisis SHAP Linear (DIPERBAIKI)
+        # Background nol mutlak karena data telah melalui StandardScaler (mean = 0)
+        background_data = pd.DataFrame(np.zeros((1, len(ml_features))), columns=ml_features)
+        explainer = shap.LinearExplainer(ml_model, background_data)
+        shap_vals_list = explainer.shap_values(ml_input_df)
         
-        # ➡️ Penanganan Dinamis: Jika output berupa list (ciri khas Regresi Logistik multikelas)
-        if isinstance(shap_explanation.values, list):
-            sv_values = shap_explanation.values[pred_class][0]
-            base_val = shap_explanation.base_values[pred_class][0]
-            single_expl = shap.Explanation(values=sv_values, 
-                                           base_values=base_val, 
-                                           data=ml_input_df.iloc[0].values, 
-                                           feature_names=ml_features)
-        else:
-            single_expl = shap_explanation[0, :, pred_class] if len(shap_explanation.shape) == 3 else shap_explanation[0, :]
-            single_expl.data = ml_input_df.iloc[0].values
+        # Ekstrak nilai SHAP khusus untuk diagnosis yang memenangkan argmax
+        sv_class = shap_vals_list[pred_class][0] 
+        base_val = explainer.expected_value[pred_class] if isinstance(explainer.expected_value, (list, np.ndarray)) else explainer.expected_value
         
-        # 7. Visualisasi SHAP
+        single_expl = shap.Explanation(
+            values=sv_class, 
+            base_values=base_val, 
+            data=ml_input_df.iloc[0].values, 
+            feature_names=ml_features
+        )
+        
+        # 9. Visualisasi SHAP
         plt.figure(figsize=(8, 4.5))
         shap.plots.waterfall(single_expl, max_display=7, show=False)
         buf = io.BytesIO()
@@ -231,7 +221,7 @@ def predict_diagnosis(data: PatientInput):
         image_base64 = base64.b64encode(buf.read()).decode('utf-8')
         plt.close()
         
-        # 8. Pembangkit Teks CLIX-M
+        # 10. Teks Eksplanasi (CLIX-M)
         sv_vals = single_expl.values
         sorted_idx = np.argsort(np.abs(sv_vals))[::-1][:3]
         explanations = []
@@ -239,20 +229,19 @@ def predict_diagnosis(data: PatientInput):
             feat_name = ml_features[idx]
             explanations.append(get_detailed_explanation(feat_name, sv_vals[idx], pred_class))
             
-        # --- BUKTI KALKULASI REDUNDANSI (UNTUK SLIDE KANAN & PRINT) ---
+        # 11. Bukti Komputasi
         calc_results = {
-            "Hematokrit (HCT)": round(float(engineered_df['hct'].iloc[0]), 2),
-            "Mean Corpuscular Hemoglobin (MCH)": round(float(engineered_df['mch'].iloc[0]), 2),
-            "MCH Concentration (MCHC)": round(float(engineered_df['mchc'].iloc[0]), 2),
-            "Absolut Neutrofil": round(float(engineered_df['abs_neu'].iloc[0]), 2),
-            "Absolut Limfosit": round(float(engineered_df['abs_lym'].iloc[0]), 2),
-            "Absolut Monosit": round(float(engineered_df['abs_mon'].iloc[0]), 2),
-            "Absolut Eosinofil": round(float(engineered_df['abs_eos'].iloc[0]), 2),
-            "Neutrophil-Lymphocyte Ratio (NLR)": round(float(engineered_df['nlr'].iloc[0]), 2),
-            "Platelet-Lymphocyte Ratio (PLR)": round(float(engineered_df['plr'].iloc[0]), 2),
-            "Monocyte-Lymphocyte Ratio (MLR)": round(float(engineered_df['mlr'].iloc[0]), 2)
+            "Hematokrit (HCT)": round(hct_calc, 2),
+            "Mean Corpuscular Hemoglobin (MCH)": round(float(engineered_df['MCH'].iloc[0]), 2),
+            "MCH Concentration (MCHC)": round(float(engineered_df['MCHC'].iloc[0]), 2),
+            "Absolut Neutrofil": round(float(engineered_df['ABS_NEU'].iloc[0]), 2),
+            "Absolut Limfosit": round(float(engineered_df['ABS_LYM'].iloc[0]), 2),
+            "Absolut Monosit": round(float(engineered_df['ABS_MON'].iloc[0]), 2),
+            "Absolut Eosinofil": round(float(engineered_df['ABS_EOS'].iloc[0]), 2),
+            "Neutrophil-Lymphocyte Ratio (NLR)": round(float(engineered_df['NLR'].iloc[0]), 2),
+            "Platelet-Lymphocyte Ratio (PLR)": round(float(engineered_df['PLR'].iloc[0]), 2),
+            "Monocyte-Lymphocyte Ratio (MLR)": round(float(engineered_df['MLR'].iloc[0]), 2)
         }
-        # ------------------------------------------------------
             
         return {
             "status": "success",
