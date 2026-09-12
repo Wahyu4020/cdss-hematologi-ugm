@@ -329,13 +329,17 @@ def predict_diagnosis(data: PatientInput):
         image_base64 = base64.b64encode(buf.read()).decode('utf-8')
         plt.close()
         
-        # 10. Teks Eksplanasi (CLIX-M)
+        ## 11. Pembangkit Teks Eksplanasi (CLIX-M)
         sv_vals = single_expl.values
         sorted_idx = np.argsort(np.abs(sv_vals))[::-1][:3]
         explanations = []
         for idx in sorted_idx:
             feat_name = ml_features[idx]
-            explanations.append(get_detailed_explanation(feat_name, sv_vals[idx], pred_class))
+            # ➡️ MENGAMBIL NILAI ASLI PASIEN DARI DATAFRAME
+            raw_val = ml_input_df.iloc[0][feat_name] 
+            
+            # ➡️ MEMASUKKAN NILAI ASLI KE DALAM FUNGSI GET_DETAILED_EXPLANATION
+            explanations.append(get_detailed_explanation(feat_name, sv_vals[idx], pred_class, raw_val))
             
         # 11. Bukti Komputasi
         calc_results = {
