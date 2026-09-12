@@ -179,7 +179,8 @@ def predict_diagnosis(data: PatientInput):
         ml_input_df = final_df[ml_features]
         
         # 6. Prediksi Machine Learning
-        p_ml = ml_model.predict_proba(ml_input_df)[0]
+        # ➡️ PERBAIKAN WARNING: Gunakan .values agar model menerima array murni
+        p_ml = ml_model.predict_proba(ml_input_df.values)[0]
         if len(p_ml) > 4: p_ml = p_ml[:4]
         if len(p_ml) < 4: p_ml = np.pad(p_ml, (0, 4 - len(p_ml)))
         p_ml = p_ml / p_ml.sum()
@@ -195,23 +196,40 @@ def predict_diagnosis(data: PatientInput):
         
         pred_class = int(np.argmax(p_final))
         
-        # 8. Analisis SHAP Linear (DIPERBAIKI)
-        # Background nol mutlak karena data telah melalui StandardScaler (mean = 0)
+        # 8. Analisis SHAP Linear (DIPERBAIKI ABSOLUT)
         background_data = pd.DataFrame(np.zeros((1, len(ml_features))), columns=ml_features)
-        explainer = shap.LinearExplainer(ml_model, background_data)
-        shap_vals_list = explainer.shap_values(ml_input_df)
         
-        # Ekstrak nilai SHAP khusus untuk diagnosis yang memenangkan argmax
-        sv_class = shap_vals_list[pred_class][0] 
-        base_val = explainer.expected_value[pred_class] if isinstance(explainer.expected_value, (list, np.ndarray)) else explainer.expected_value
+        # Gunakan shap.Explainer umum (kompatibel untuk model linear multikelas)
+        explainer = shap.Explainer(ml_model, background_data)
+        shap_explanation = explainer(ml_input_df)
         
+        if isinstance(shap_explanation.values, list):
+            # Jika SHAP mengembalikan bentuk List
+            sv_class = shap_explanation.values[pred_class][0] 
+            base_val = shap_explanation.base_values[pred_class][0]
+        else:
+            # ➡️ PERBAIKAN ERROR: Jika SHAP mengembalikan Array 3D Numpy
+            # Format shape: (1_Pasien, 10_Fitur, 4_Kelas)
+            # Kita panggil: Pasien ke-0, Semua Fitur (:), Kelas ke-[pred_class]
+            if len(shap_explanation.values.shape) == 3:
+                sv_class = shap_explanation.values[0, :, pred_class]
+                
+                # Penanganan base_values (ekspektasi rata-rata)
+                if len(np.array(shap_explanation.base_values).shape) == 2:
+                    base_val = shap_explanation.base_values[0, pred_class]
+                else:
+                    base_val = shap_explanation.base_values[pred_class]
+            else:
+                # Fallback aman
+                sv_class = shap_explanation.values[0]
+                base_val = shap_explanation.base_values[0]
+
         single_expl = shap.Explanation(
             values=sv_class, 
             base_values=base_val, 
             data=ml_input_df.iloc[0].values, 
             feature_names=ml_features
         )
-        
         # 9. Visualisasi SHAP
         plt.figure(figsize=(8, 4.5))
         shap.plots.waterfall(single_expl, max_display=7, show=False)
