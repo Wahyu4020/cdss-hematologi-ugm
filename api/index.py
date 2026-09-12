@@ -82,18 +82,18 @@ def serve_frontend():
 
 # ─── SCHEMA INPUT DARI WEB ───────────────────────────────────────────────────
 class PatientInput(BaseModel):
-    Gender: Optional[float] = None
-    Age: Optional[float] = None
-    hb: Optional[float] = None
-    rbc: Optional[float] = None
-    mcv: Optional[float] = None
-    rdw: Optional[float] = None
-    wbc: Optional[float] = None
-    neu: Optional[float] = None
-    lym: Optional[float] = None
-    mon: Optional[float] = None
-    eos: Optional[float] = None
-    plt: Optional[float] = None
+    Gender: Optional[str] = None
+    Age: Optional[str] = None
+    hb: Optional[str] = None
+    rbc: Optional[str] = None
+    mcv: Optional[str] = None
+    rdw: Optional[str] = None
+    wbc: Optional[str] = None
+    neu: Optional[str] = None
+    lym: Optional[str] = None
+    mon: Optional[str] = None
+    eos: Optional[str] = None
+    plt: Optional[str] = None
     symptoms: List[str] = []
     weight_ml: float = 55.0
     weight_sym: float = 25.0
@@ -148,6 +148,8 @@ def get_detailed_explanation(feature_name, shap_value, pred_class, raw_val):
                 return base_text + " Produksi trombosit yang berlebihan (trombositosis) mengonfirmasi hiperaktivitas sumsum tulang, yang berpotensi merujuk pada kelainan mieloproliferatif."
             else:
                 return base_text + " Peningkatan keping darah di atas rentang fisiologis menandakan adanya anomali pada aktivitas produksi megakariosit di dalam sumsum tulang."
+        else:
+            return base_text + " Jumlah trombosit pasien berada pada rentang fisiologis normal, menunjukkan fungsi hemostasis primer yang stabil."
                 
     # ─── LOGIKA WBC (LEUKOSIT) ───
     elif feat_upper == "WBC":
@@ -169,6 +171,8 @@ def get_detailed_explanation(feature_name, shap_value, pred_class, raw_val):
             return base_text + " Peningkatan eritrosit (hemokonsentrasi) merupakan tanda bahaya (danger sign) pada Dengue yang menunjukkan adanya sindrom kebocoran plasma darah."
         elif raw_val < 4.0:
             return base_text + " Penurunan eritrosit merupakan penanda kondisi anemia, riwayat perdarahan, atau gangguan produksi sel darah merah."
+        else:
+            return base_text + " Jumlah eritrosit terpantau berada pada ambang batas normal."
             
     # ─── LOGIKA INDEKS ERITROSIT REDUNDAN (MCV, MCH, MCHC) ───
     elif feat_upper == "MCV":
@@ -225,17 +229,28 @@ def get_detailed_explanation(feature_name, shap_value, pred_class, raw_val):
         return base_text + korelasi_rasio + " Fitur turunan antar-sel darah ini digunakan oleh model sebagai biomarker prediktif tambahan untuk menilai derajat keparahan inflamasi sistemik secara komprehensif."
         
     return base_text
+
 # ─── ENDPOINT UTAMA ──────────────────────────────────────────────────────────
 @app.post("/api/predict")
 def predict_diagnosis(data: PatientInput):
     try:
+        # Konversi Input (Mengubah Kosong atau "-" menjadi NaN)
         if hasattr(data, "model_dump"):
-            raw_dict = data.model_dump(exclude={"symptoms", "weight_ml", "weight_sym", "weight_who"})
+            raw_input = data.model_dump(exclude={"symptoms", "weight_ml", "weight_sym", "weight_who"})
         else:
-            raw_dict = data.dict(exclude={"symptoms", "weight_ml", "weight_sym", "weight_who"})
+            raw_input = data.dict(exclude={"symptoms", "weight_ml", "weight_sym", "weight_who"})
             
-        # Mengubah key ke lowercase agar konsisten
-        raw_dict = {k.lower(): (np.nan if v is None else v) for k, v in raw_dict.items()}
+        raw_dict = {}
+        for k, v in raw_input.items():
+            val_str = str(v).strip()
+            if v is None or val_str in ["", "-"]:
+                raw_dict[k.lower()] = np.nan
+            else:
+                try:
+                    raw_dict[k.lower()] = float(v)
+                except ValueError:
+                    raw_dict[k.lower()] = np.nan
+                    
         raw_df = pd.DataFrame([raw_dict])
         
         # 1. Kalkulasi Fisiologis
@@ -243,11 +258,11 @@ def predict_diagnosis(data: PatientInput):
         cbc_calc.fit(raw_df) 
         engineered_df = cbc_calc.transform(raw_df)
         
-        # 2. Penyelarasan Nama Kolom (Mencegah Bug 'Umur' dan Data Hilang)
+        # 2. Penyelarasan Nama Kolom
         engineered_df.columns = [c.lower() for c in engineered_df.columns]
         engineered_df = engineered_df.rename(columns=MAP_WEB_TO_DATASET)
         
-        # 3. Penyelarasan Skala Data
+        # 3. Penyelarasan Bentuk Matriks
         expected_features = list(scaler.feature_names_in_)
         aligned_df = pd.DataFrame(columns=expected_features)
         aligned_df.loc[0] = np.nan
@@ -256,12 +271,14 @@ def predict_diagnosis(data: PatientInput):
             if expected_col in engineered_df.columns:
                 aligned_df.at[0, expected_col] = engineered_df.iloc[0][expected_col]
         
-        aligned_df = aligned_df.fillna(0)
-        
-        # 4. Scaling dan Imputasi
+        # 4. Pra-pemrosesan (Scaling dan Imputasi)
         scaled_data = scaler.transform(aligned_df)
         imputed_data = imputer.transform(scaled_data)
         final_df = pd.DataFrame(imputed_data, columns=expected_features)
+        
+        # ➡️ INVERSE TRANSFORM: Mengembalikan data ke angka asli pasien untuk generator teks
+        raw_imputed_data = scaler.inverse_transform(final_df)
+        raw_imputed_df = pd.DataFrame(raw_imputed_data, columns=expected_features)
         
         # 5. Filter Spesifik 10 Fitur Model Regresi Logistik
         target_features = ['PLT', 'MCV', 'PLR', 'HCT', 'HB', 'WBC', 'ABS_NEU', 'RDW', 'ABS_EOS', 'NLR']
@@ -269,14 +286,13 @@ def predict_diagnosis(data: PatientInput):
         ml_input_df = final_df[ml_features]
         
         # 6. Prediksi Machine Learning
-        # ➡️ PERBAIKAN WARNING: Gunakan .values agar model menerima array murni
         p_ml = ml_model.predict_proba(ml_input_df.values)[0]
         if len(p_ml) > 4: p_ml = p_ml[:4]
         if len(p_ml) < 4: p_ml = np.pad(p_ml, (0, 4 - len(p_ml)))
         p_ml = p_ml / p_ml.sum()
         
         # 7. Fusi Tri-Brid CDSS (Evaluasi Gejala & Aturan WHO)
-        hct_calc = float(engineered_df['HCT'].iloc[0])
+        hct_calc = float(engineered_df['HCT'].iloc[0]) if pd.notna(engineered_df['HCT'].iloc[0]) else np.nan
         p_sym = pillar_ii_symptom_score(data.symptoms)
         p_who = pillar_iii_who_rules(raw_dict["plt"], raw_dict["wbc"], hct_calc)
         
@@ -286,31 +302,22 @@ def predict_diagnosis(data: PatientInput):
         
         pred_class = int(np.argmax(p_final))
         
-        # 8. Analisis SHAP Linear (DIPERBAIKI ABSOLUT)
+        # 8. Analisis SHAP Linear
         background_data = pd.DataFrame(np.zeros((1, len(ml_features))), columns=ml_features)
-        
-        # Gunakan shap.Explainer umum (kompatibel untuk model linear multikelas)
         explainer = shap.Explainer(ml_model, background_data)
         shap_explanation = explainer(ml_input_df)
         
         if isinstance(shap_explanation.values, list):
-            # Jika SHAP mengembalikan bentuk List
             sv_class = shap_explanation.values[pred_class][0] 
             base_val = shap_explanation.base_values[pred_class][0]
         else:
-            # ➡️ PERBAIKAN ERROR: Jika SHAP mengembalikan Array 3D Numpy
-            # Format shape: (1_Pasien, 10_Fitur, 4_Kelas)
-            # Kita panggil: Pasien ke-0, Semua Fitur (:), Kelas ke-[pred_class]
             if len(shap_explanation.values.shape) == 3:
                 sv_class = shap_explanation.values[0, :, pred_class]
-                
-                # Penanganan base_values (ekspektasi rata-rata)
                 if len(np.array(shap_explanation.base_values).shape) == 2:
                     base_val = shap_explanation.base_values[0, pred_class]
                 else:
                     base_val = shap_explanation.base_values[pred_class]
             else:
-                # Fallback aman
                 sv_class = shap_explanation.values[0]
                 base_val = shap_explanation.base_values[0]
 
@@ -320,6 +327,7 @@ def predict_diagnosis(data: PatientInput):
             data=ml_input_df.iloc[0].values, 
             feature_names=ml_features
         )
+        
         # 9. Visualisasi SHAP
         plt.figure(figsize=(8, 4.5))
         shap.plots.waterfall(single_expl, max_display=7, show=False)
@@ -329,30 +337,33 @@ def predict_diagnosis(data: PatientInput):
         image_base64 = base64.b64encode(buf.read()).decode('utf-8')
         plt.close()
         
-        ## 11. Pembangkit Teks Eksplanasi (CLIX-M)
+        # 10. Pembangkit Teks Eksplanasi (CLIX-M)
         sv_vals = single_expl.values
         sorted_idx = np.argsort(np.abs(sv_vals))[::-1][:3]
         explanations = []
         for idx in sorted_idx:
             feat_name = ml_features[idx]
-            # ➡️ MENGAMBIL NILAI ASLI PASIEN DARI DATAFRAME
-            raw_val = ml_input_df.iloc[0][feat_name] 
             
-            # ➡️ MEMASUKKAN NILAI ASLI KE DALAM FUNGSI GET_DETAILED_EXPLANATION
+            # ➡️ PERBAIKAN: Mengambil angka medis asli yang belum diskala
+            raw_val = raw_imputed_df.iloc[0][feat_name] 
+            
             explanations.append(get_detailed_explanation(feat_name, sv_vals[idx], pred_class, raw_val))
             
         # 11. Bukti Komputasi
+        def safe_round(val):
+            return round(float(val), 2) if pd.notna(val) else "N/A"
+            
         calc_results = {
-            "Hematokrit (HCT)": round(hct_calc, 2),
-            "Mean Corpuscular Hemoglobin (MCH)": round(float(engineered_df['MCH'].iloc[0]), 2),
-            "MCH Concentration (MCHC)": round(float(engineered_df['MCHC'].iloc[0]), 2),
-            "Absolut Neutrofil": round(float(engineered_df['ABS_NEU'].iloc[0]), 2),
-            "Absolut Limfosit": round(float(engineered_df['ABS_LYM'].iloc[0]), 2),
-            "Absolut Monosit": round(float(engineered_df['ABS_MON'].iloc[0]), 2),
-            "Absolut Eosinofil": round(float(engineered_df['ABS_EOS'].iloc[0]), 2),
-            "Neutrophil-Lymphocyte Ratio (NLR)": round(float(engineered_df['NLR'].iloc[0]), 2),
-            "Platelet-Lymphocyte Ratio (PLR)": round(float(engineered_df['PLR'].iloc[0]), 2),
-            "Monocyte-Lymphocyte Ratio (MLR)": round(float(engineered_df['MLR'].iloc[0]), 2)
+            "Hematokrit (HCT)": safe_round(engineered_df['HCT'].iloc[0]),
+            "Mean Corpuscular Hemoglobin (MCH)": safe_round(engineered_df['MCH'].iloc[0]),
+            "MCH Concentration (MCHC)": safe_round(engineered_df['MCHC'].iloc[0]),
+            "Absolut Neutrofil": safe_round(engineered_df['ABS_NEU'].iloc[0]),
+            "Absolut Limfosit": safe_round(engineered_df['ABS_LYM'].iloc[0]),
+            "Absolut Monosit": safe_round(engineered_df['ABS_MON'].iloc[0]),
+            "Absolut Eosinofil": safe_round(engineered_df['ABS_EOS'].iloc[0]),
+            "Neutrophil-Lymphocyte Ratio (NLR)": safe_round(engineered_df['NLR'].iloc[0]),
+            "Platelet-Lymphocyte Ratio (PLR)": safe_round(engineered_df['PLR'].iloc[0]),
+            "Monocyte-Lymphocyte Ratio (MLR)": safe_round(engineered_df['MLR'].iloc[0])
         }
             
         return {
