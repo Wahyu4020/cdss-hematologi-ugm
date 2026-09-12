@@ -4,7 +4,6 @@ from pydantic import BaseModel
 from typing import List, Optional
 from sklearn.base import BaseEstimator, TransformerMixin
 import joblib
-import json
 import shap
 import numpy as np
 import pandas as pd
@@ -12,7 +11,6 @@ import matplotlib.pyplot as plt
 import io
 import base64
 import traceback
-from xgboost import XGBClassifier
 
 # ─── CLASS TRANSFORMER (Wajib Dideklarasikan Agar PKL Bisa Dimuat) ───────────
 class CBCCalculatorTransformer(BaseEstimator, TransformerMixin):
@@ -40,28 +38,34 @@ class CBCCalculatorTransformer(BaseEstimator, TransformerMixin):
 app = FastAPI()
 
 CLASS_NAMES = ["Normal", "ITP", "Dengue/DBD", "Thrombocytosis"]
+
+# ➡️ PERUBAHAN: Matriks 14 Gejala Klinis Terbaru
 SYMPTOM_WEIGHTS = {
-    "Petekie spontan / memar tanpa trauma":        [0.0, 0.40, 0.20, 0.0],
-    "Perdarahan mukosa (epistaksis, gusi)":        [0.0, 0.35, 0.25, 0.0],
-    "Demam tinggi 2–7 hari mendadak":              [0.0, 0.05, 0.45, 0.0],
-    "Nyeri retro-orbital / sakit kepala hebat":    [0.0, 0.0,  0.35, 0.0],
-    "Mialgia / artralgia (nyeri otot-sendi)":      [0.0, 0.0,  0.30, 0.0],
-    "Ruam kulit / dengue rash":                    [0.0, 0.0,  0.40, 0.0],
-    "Riwayat trombosis / DVT / emboli":            [0.0, 0.05, 0.0,  0.55],
-    "Eritromelalgia / kemerahan ujung jari":       [0.0, 0.0,  0.0,  0.45],
-    "Asimptomatik (tidak ada keluhan klinis)":     [0.50, 0.0, 0.0,  0.0],
+    "Demam tinggi mendadak (2-7 hari)": [0.0, 0.0, 0.85, 0.0],
+    "Nyeri pegal hebat di belakang mata, otot, dan sendi": [0.0, 0.0, 0.75, 0.0],
+    "Bintik merah di kulit atau memar tiba-tiba tanpa sebab": [0.0, 0.85, 0.45, 0.05],
+    "Mimisan atau gusi berdarah secara tiba-tiba": [0.0, 0.75, 0.35, 0.10],
+    "Muntah darah atau BAB berwarna hitam legam": [0.0, 0.30, 0.20, 0.05],
+    "Haid/Menstruasi sangat deras dan lama (pada perempuan)": [0.0, 0.60, 0.15, 0.05],
+    "Sesak napas atau perut terasa bengkak/sangat begah (Gejala rembesan cairan)": [0.0, 0.0, 0.70, 0.0],
+    "Ujung jari tangan/kaki sangat dingin, pucat, dan badan sangat lemas (Gejala menuju syok)": [0.0, 0.05, 0.80, 0.0],
+    "Telapak tangan/kaki terasa panas terbakar dan kemerahan (Erythromelalgia)": [0.0, 0.0, 0.0, 0.80],
+    "Kulit terasa sangat gatal setelah mandi atau kena air (Pruritus aquagenik)": [0.0, 0.0, 0.0, 0.75],
+    "Kaki/betis tiba-tiba bengkak dan sangat nyeri (Gejala sumbatan darah)": [0.0, 0.0, 0.0, 0.85],
+    "Perut kiri atas terasa mengganjal dan cepat kenyang saat makan (Gejala limpa bengkak)": [0.0, 0.05, 0.15, 0.65],
+    "Rasa kliyengan (mau pingsan) disertai kesemutan/kebas": [0.0, 0.0, 0.10, 0.70],
+    "Asimptomatik (tidak ada keluhan klinis)": [0.50, 0.0, 0.0, 0.0]
 }
 
 try:
-    # 1. Load Scaler dan Imputer menggunakan joblib
-    scaler = joblib.load("MinMax_scaler.pkl")
+    # ➡️ PERUBAHAN: Load 100% menggunakan Pickle/Joblib (Termasuk Model ML)
+    # Pastikan nama file ini sesuai dengan yang diekstrak dari skrip Colab Anda
+    scaler = joblib.load("std_scaler.pkl") 
     imputer = joblib.load("knn_imputer.pkl")
-    
-    # 2. Load Model XGBoost menggunakan fungsi bawaan XGBoost
-    ml_model = XGBClassifier()
-    ml_model.load_model("xgb_model.json")
+    ml_model = joblib.load("lr_model.pkl") 
+    print("✅ Seluruh model (.pkl) berhasil dimuat!")
 except Exception as e:
-    print(f"Error loading models: {e}")
+    print(f"❌ Error loading models: {e}")
 
 @app.get("/")
 def serve_frontend():
@@ -109,6 +113,11 @@ def pillar_ii_symptom_score(selected_symptoms):
     for symptom in selected_symptoms: 
         if symptom in SYMPTOM_WEIGHTS:
             raw += np.array(SYMPTOM_WEIGHTS[symptom])
+            
+    # Tangani Asimptomatik secara absolut
+    if "Asimptomatik (tidak ada keluhan klinis)" in selected_symptoms or raw.sum() == 0:
+        return np.array(SYMPTOM_WEIGHTS["Asimptomatik (tidak ada keluhan klinis)"])
+        
     if raw.sum() > 0: return raw / raw.sum()
     return np.ones(4) / 4.0
 
@@ -166,25 +175,22 @@ def predict_diagnosis(data: PatientInput):
         imputed_data = imputer.transform(scaled_data)
         final_df = pd.DataFrame(imputed_data, columns=expected_features)
         
-        # --- FILTER FITUR KHUSUS XGBOOST ---
-        # ⚠️ PENTING: Jika 10 fitur ini salah (misal Anda pakai 'hct' tapi di sini 'Age'), 
-        # silakan ganti kata di dalam tanda kutip ini.
-        target_features =['PLT', 'Umur', 'PLR', 'MCV', 'MCH', 'ABS_EOS', 'ABS_NEU', 'WBC', 'RBC', 'ABS_MON']
+        # --- FILTER FITUR KHUSUS REGRESI LOGISTIK (LASSO) ---
+        # ⚠️ PENTING: Ganti isi list ini dengan 10 fitur spesifik yang dihasilkan dari LASSO L1 Anda.
+        target_features = ['PLT', 'Umur', 'PLR', 'MCV', 'MCH', 'ABS_EOS', 'ABS_NEU', 'WBC', 'RBC', 'ABS_MON']
         
-        # Trik Cerdas: Cocokkan huruf besar/kecil secara otomatis dengan memori Colab
-        xgb_features = []
+        ml_features = []
         for tf in target_features:
             for exp_col in expected_features:
                 if tf.lower() == exp_col.lower():
-                    xgb_features.append(exp_col)
+                    ml_features.append(exp_col)
                     break
         
-        # Saring final_df agar HANYA menyisakan 10 kolom tersebut
-        xgb_input_df = final_df[xgb_features]
+        ml_input_df = final_df[ml_features]
         # -----------------------------------
         
         # 4. Prediksi Machine Learning
-        p_ml = ml_model.predict_proba(xgb_input_df)[0]
+        p_ml = ml_model.predict_proba(ml_input_df)[0]
         if len(p_ml) > 4: p_ml = p_ml[:4]
         if len(p_ml) < 4: p_ml = np.pad(p_ml, (0, 4 - len(p_ml)))
         p_ml = p_ml / p_ml.sum()
@@ -200,12 +206,21 @@ def predict_diagnosis(data: PatientInput):
         
         pred_class = int(np.argmax(p_final))
         
-        # 6. Analisis SHAP
-        explainer = shap.TreeExplainer(ml_model)
-        shap_explanation = explainer(xgb_input_df)
+        # 6. Analisis SHAP (Disesuaikan untuk Regresi Logistik)
+        explainer = shap.Explainer(ml_model, ml_input_df)
+        shap_explanation = explainer(ml_input_df)
         
-        single_expl = shap_explanation[0, :, pred_class] if len(shap_explanation.shape) == 3 else shap_explanation[0, :]
-        single_expl.data = xgb_input_df.iloc[0].values
+        # ➡️ Penanganan Dinamis: Jika output berupa list (ciri khas Regresi Logistik multikelas)
+        if isinstance(shap_explanation.values, list):
+            sv_values = shap_explanation.values[pred_class][0]
+            base_val = shap_explanation.base_values[pred_class][0]
+            single_expl = shap.Explanation(values=sv_values, 
+                                           base_values=base_val, 
+                                           data=ml_input_df.iloc[0].values, 
+                                           feature_names=ml_features)
+        else:
+            single_expl = shap_explanation[0, :, pred_class] if len(shap_explanation.shape) == 3 else shap_explanation[0, :]
+            single_expl.data = ml_input_df.iloc[0].values
         
         # 7. Visualisasi SHAP
         plt.figure(figsize=(8, 4.5))
@@ -221,7 +236,7 @@ def predict_diagnosis(data: PatientInput):
         sorted_idx = np.argsort(np.abs(sv_vals))[::-1][:3]
         explanations = []
         for idx in sorted_idx:
-            feat_name = xgb_features[idx]
+            feat_name = ml_features[idx]
             explanations.append(get_detailed_explanation(feat_name, sv_vals[idx], pred_class))
             
         # --- BUKTI KALKULASI REDUNDANSI (UNTUK SLIDE KANAN & PRINT) ---
@@ -250,7 +265,7 @@ def predict_diagnosis(data: PatientInput):
             },
             "shap_image": image_base64,
             "clix_m_text": explanations,
-            "kalkulasi_fisiologis": calc_results # <--- Tambahkan baris ini
+            "kalkulasi_fisiologis": calc_results 
         }
         
     except Exception as e:
