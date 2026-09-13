@@ -303,10 +303,10 @@ def predict_diagnosis(data: PatientInput):
         single_expl = shap.Explanation(values=sv_class, base_values=base_val, data=ml_input_df.iloc[0].values, feature_names=ml_features)
         
         # ➡️ SHAP VISUALISASI DIPERBARUI: Tinggi 6 dan tampilkan 10 fitur
-        plt.figure(figsize=(8, 6))
+        plt.figure(figsize=(10, 7))
         shap.plots.waterfall(single_expl, max_display=10, show=False)
         buf = io.BytesIO()
-        plt.savefig(buf, format="png", dpi=100, bbox_inches='tight')
+        plt.savefig(buf, format="png", dpi=150, bbox_inches='tight')
         buf.seek(0)
         image_base64 = base64.b64encode(buf.read()).decode('utf-8')
         plt.close()
