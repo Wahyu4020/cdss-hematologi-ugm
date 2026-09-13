@@ -99,21 +99,47 @@ class PatientInput(BaseModel):
     weight_who: Union[float, str, None] = 20.0
 
 # ─── FUNGSI LOGIKA ───────────────────────────────
-def pillar_iii_who_rules(plt_val, wbc_val, hct_val):
+def pillar_iii_who_rules(plt_val, wbc_val, hct_val, gender_val, age_val):
     if np.isnan(plt_val) or np.isnan(wbc_val) or np.isnan(hct_val):
         return np.ones(4) / 4.0
+        
     raw = np.zeros(4, dtype=float)
-    if plt_val < 100 and wbc_val < 5.0 and hct_val > 45: raw[2] = 1.0  
-    elif plt_val < 100 and wbc_val < 5.0: raw[2] = 0.6  
-    elif plt_val < 100 and hct_val > 45: raw[2] = 0.4  
-    if plt_val < 100 and 5.0 <= wbc_val <= 12.0 and 35 <= hct_val <= 50: raw[1] = 1.0
+    
+    # ─── LOGIKA HEMATOKRIT BERDASARKAN GENDER ───
+    # Laki-laki = 50%, Perempuan/Default = 46%
+    hct_limit = 50.0 if gender_val == 1.0 else 46.0
+    
+    # ─── LOGIKA LEUKOSIT (WBC) BERDASARKAN UMUR ───
+    if not np.isnan(age_val) and age_val < 1.0:
+        # Bayi (< 1 tahun): Ambang bawah leukopenia 6.0
+        wbc_min, wbc_max = 6.0, 17.0
+    elif not np.isnan(age_val) and age_val <= 12.0:
+        # Anak-anak (1 - 12 tahun): Ambang bawah leukopenia 5.0
+        wbc_min, wbc_max = 5.0, 13.0
+    else:
+        # Dewasa (> 12 tahun) atau umur tidak diisi: Ambang bawah 4.0
+        wbc_min, wbc_max = 4.0, 11.0
+    
+    # 1. ATURAN DENGUE (Trombosit <= 100, Leukopenia Dinamis, Hemokonsentrasi Dinamis)
+    if plt_val < 100 and wbc_val < wbc_min and hct_val > hct_limit: raw[2] = 1.0  
+    elif plt_val < 100 and wbc_val < wbc_min: raw[2] = 0.6  
+    elif plt_val < 100 and hct_val > hct_limit: raw[2] = 0.4  
+    
+    # 2. ATURAN ITP (Trombosit < 100, WBC Normal Dinamis, HCT Normal)
+    if plt_val < 100 and wbc_min <= wbc_val <= wbc_max and 35 <= hct_val <= hct_limit: raw[1] = 1.0
     elif plt_val < 100 and raw[2] == 0: raw[1] = 0.5  
+    
+    # 3. ATURAN TROMBOSITOSIS
     if plt_val > 600: raw[3] = 1.0
     elif plt_val > 450: raw[3] = 0.7
-    if (150 <= plt_val <= 400) and (4.0 <= wbc_val <= 10.0) and (35 <= hct_val <= 50): raw[0] = 1.0
+    
+    # 4. ATURAN NORMAL (Rentang Fisiologis Dinamis)
+    if (150 <= plt_val <= 400) and (wbc_min <= wbc_val <= wbc_max) and (35 <= hct_val <= hct_limit): raw[0] = 1.0
     elif raw.sum() == 0: raw[0] = 0.3  
+    
     if raw.sum() > 0: return raw / raw.sum()
     return np.ones(4) / 4.0
+
 
 def pillar_ii_symptom_score(selected_symptoms):
     if not selected_symptoms: return np.array([0.25, 0.25, 0.25, 0.25])
@@ -125,6 +151,7 @@ def pillar_ii_symptom_score(selected_symptoms):
         return np.array(SYMPTOM_WEIGHTS["Asimptomatik (tidak ada keluhan klinis)"])
     if raw.sum() > 0: return raw / raw.sum()
     return np.ones(4) / 4.0
+
 
 def get_detailed_explanation(feature_name, shap_value, pred_class, raw_val):
     direction = "mendorong probabilitas" if shap_value > 0 else "menahan/mengurangi risiko"
@@ -138,16 +165,20 @@ def get_detailed_explanation(feature_name, shap_value, pred_class, raw_val):
             if pred_class == 1: return base_text + " Penurunan trombosit (trombositopenia) terisolasi adalah tanda khas ITP akibat destruksi keping darah oleh autoimun."
             elif pred_class == 2: return base_text + " Trombositopenia sangat lazim pada fase akut Dengue akibat supresi sumsum tulang dan destruksi perifer."
             else: return base_text + " Trombositopenia mengindikasikan tingginya tingkat destruksi keping darah atau kegagalan produksi."
-        elif raw_val > 450: return base_text + " Peningkatan trombosit (trombositosis) mengonfirmasi hiperaktivitas sumsum tulang, sering muncul sebagai respons reaktif terhadap inflamasi sistemik."
-        else: return base_text + " Jumlah trombosit berada dalam rentang normal, menunjukkan fungsi hemostasis primer yang stabil."
+        elif raw_val > 450:
+            return base_text + " Peningkatan trombosit (trombositosis) mengonfirmasi hiperaktivitas sumsum tulang, sering muncul sebagai respons reaktif terhadap inflamasi sistemik atau infeksi."
+        else:
+            return base_text + " Jumlah trombosit berada dalam rentang normal, menunjukkan fungsi hemostasis (pembekuan darah) primer yang stabil."
                 
     # ─── 2. LEUKOSIT (WBC) ───
     elif feat_upper == "WBC":
         if raw_val < 4.0:
             if pred_class == 2: return base_text + " Penurunan sel darah putih (leukopenia) merupakan penanda patognomonik awal pada infeksi virus akut seperti Dengue."
             else: return base_text + " Leukopenia dapat terjadi akibat supresi sumsum tulang atau efek toksik sistemik."
-        elif raw_val > 11.0: return base_text + " Peningkatan sel darah putih (leukositosis) menandakan respons imun tubuh yang sangat aktif akibat infeksi bakteri atau inflamasi hebat."
-        else: return base_text + " Jumlah leukosit dalam rentang fisiologis menandakan fungsi imunitas bawaan beroperasi normal."
+        elif raw_val > 11.0:
+            return base_text + " Peningkatan sel darah putih (leukositosis) menandakan respons imun tubuh yang sangat aktif akibat infeksi bakteri atau inflamasi hebat."
+        else:
+            return base_text + " Jumlah leukosit dalam rentang fisiologis menandakan fungsi imunitas bawaan (innate immunity) beroperasi normal."
 
     # ─── 3. HEMOGLOBIN (HB) & HEMATOKRIT (HCT) ───
     elif feat_upper == "HB":
@@ -212,9 +243,12 @@ def get_detailed_explanation(feature_name, shap_value, pred_class, raw_val):
     # ─── 7. RASIO INFLAMASI (NLR, PLR, MLR) ───
     elif feat_upper in ["NLR", "PLR", "MLR"]:
         korelasi = "NLR (Rasio Neutrofil/Limfosit)" if feat_upper == "NLR" else "PLR (Rasio Trombosit/Limfosit)" if feat_upper == "PLR" else "MLR (Rasio Monosit/Limfosit)"
-        if raw_val > 3.0: return base_text + f" Nilai {korelasi} yang tinggi secara literatur digunakan sebagai biomarker prediktif kuat adanya derajat keparahan inflamasi sistemik pada pasien."
-        elif raw_val < 1.0: return base_text + f" Nilai {korelasi} yang sangat rendah sering mengikuti pola limfositosis relatif pada infeksi virus."
-        else: return base_text + f" {korelasi} berada dalam batas keseimbangan (ekuilibrium) fisiologis."
+        if raw_val > 3.0:
+            return base_text + f" Nilai {korelasi} yang tinggi secara literatur digunakan sebagai biomarker prediktif kuat adanya derajat keparahan inflamasi sistemik pada pasien."
+        elif raw_val < 1.0:
+            return base_text + f" Nilai {korelasi} yang sangat rendah sering mengikuti pola limfositosis relatif pada infeksi virus."
+        else:
+            return base_text + f" {korelasi} berada dalam ekuilibrium (keseimbangan) fisiologis."
         
     return base_text
 
@@ -272,7 +306,11 @@ def predict_diagnosis(data: PatientInput):
         hct_calc = float(engineered_df['HCT'].iloc[0]) if pd.notna(engineered_df['HCT'].iloc[0]) else np.nan
         safe_symptoms = data.symptoms if data.symptoms is not None else []
         p_sym = pillar_ii_symptom_score(safe_symptoms)
-        p_who = pillar_iii_who_rules(raw_dict["plt"], raw_dict["wbc"], hct_calc)
+        
+        gender_input = raw_dict.get("gender", np.nan)
+        age_input = raw_dict.get("age", np.nan)
+        
+        p_who = pillar_iii_who_rules(raw_dict["plt"], raw_dict["wbc"], hct_calc, gender_input, age_input)
         
         try: w_ml = float(data.weight_ml) / 100.0
         except: w_ml = 0.55
@@ -302,7 +340,7 @@ def predict_diagnosis(data: PatientInput):
 
         single_expl = shap.Explanation(values=sv_class, base_values=base_val, data=ml_input_df.iloc[0].values, feature_names=ml_features)
         
-        # ➡️ SHAP VISUALISASI DIPERBARUI: Tinggi 6 dan tampilkan 10 fitur
+        # VISUALISASI SHAP DIPERBESAR
         plt.figure(figsize=(10, 7))
         shap.plots.waterfall(single_expl, max_display=10, show=False)
         buf = io.BytesIO()
@@ -312,7 +350,7 @@ def predict_diagnosis(data: PatientInput):
         plt.close()
         
         sv_vals = single_expl.values
-        # ➡️ PENJELASAN NARASI DIPERBARUI: Ambil 5 fitur teratas
+        # AMBIL 5 FITUR UNTUK NARASI
         sorted_idx = np.argsort(np.abs(sv_vals))[::-1][:5]
         explanations = [get_detailed_explanation(ml_features[idx], sv_vals[idx], pred_class, raw_imputed_df.iloc[0][ml_features[idx]]) for idx in sorted_idx]
         
