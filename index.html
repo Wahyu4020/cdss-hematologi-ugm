@@ -363,31 +363,28 @@
                     const p2Container = document.getElementById("pilar-2-container");
                     const p3Container = document.getElementById("pilar-3-container");
                     
+                    // Kendali Pilar 1
                     if (breakdown.hasOwnProperty("Pilar_1_ML")) {
-                        p1Container.classList.remove("d-none");
-                        p1Container.classList.add("d-flex");
+                        p1Container.style.setProperty("display", "flex", "important");
                         document.getElementById('val_ml').innerText = breakdown.Pilar_1_ML + "%";
                     } else {
-                        p1Container.classList.remove("d-flex");
-                        p1Container.classList.add("d-none");
+                        p1Container.style.setProperty("display", "none", "important");
                     }
                     
+                    // Kendali Pilar 2
                     if (breakdown.hasOwnProperty("Pilar_2_Sym")) {
-                        p2Container.classList.remove("d-none");
-                        p2Container.classList.add("d-flex");
+                        p2Container.style.setProperty("display", "flex", "important");
                         document.getElementById('val_sym').innerText = breakdown.Pilar_2_Sym + "%";
                     } else {
-                        p2Container.classList.remove("d-flex");
-                        p2Container.classList.add("d-none");
+                        p2Container.style.setProperty("display", "none", "important");
                     }
                     
+                    // Kendali Pilar 3
                     if (breakdown.hasOwnProperty("Pilar_3_WHO")) {
-                        p3Container.classList.remove("d-none");
-                        p3Container.classList.add("d-flex");
+                        p3Container.style.setProperty("display", "flex", "important");
                         document.getElementById('val_who').innerText = breakdown.Pilar_3_WHO + "%";
                     } else {
-                        p3Container.classList.remove("d-flex");
-                        p3Container.classList.add("d-none");
+                        p3Container.style.setProperty("display", "none", "important");
                     }
                     // ----------------------------------------------------------------
 
