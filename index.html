@@ -34,14 +34,15 @@
         
         /* --- CSS KHUSUS PRINT (1 HALAMAN REKAM MEDIS SUPER PADAT) --- */
         @media print {
-            nav, #beranda, #informasi, #panduan, footer, #cdssForm, #actionButtons, .d-print-none { 
-                display: none !important; 
-            }
-            @page { margin: 1cm; } 
-            body, .app-container, #aplikasi, #resultArea {
-                margin: 0 !important; padding: 0 !important; box-shadow: none !important; border: none !important;
-                background-color: white !important; width: 100% !important;
-            }
+            nav, #beranda, #informasi, #panduan, footer, #cdssForm, #actionButtons, .d-print-none { display: none !important; }
+            
+            /* ➡️ MARGIN DIPERKECIL MENJADI 0.3cm (Sangat mepet ujung kertas) */
+            @page { margin: 0.3cm; } 
+            
+            /* ➡️ MEMAKSA CONTAINER MELEBAR PENUH 100% */
+            .container { max-width: 100% !important; padding: 0 !important; width: 100% !important; }
+            
+            body, .app-container, #aplikasi, #resultArea { margin: 0 !important; padding: 0 !important; box-shadow: none !important; border: none !important; background-color: white !important; width: 100% !important; }
             #resultArea { display: block !important; }
             .display-5 { font-size: 1.3rem !important; margin-bottom: 0px !important; }
             h4 { font-size: 0.9rem !important; margin-bottom: 6px !important; }
@@ -50,14 +51,14 @@
             .badge { font-size: 0.65rem !important; border: 1px solid #000; color: #000 !important; background: transparent !important; padding: 2px 5px !important;}
             .clix-box { padding: 3px 6px !important; font-size: 0.6rem !important; margin-bottom: 2px !important; border-left: 3px solid #000; background: #fff !important;}
             .list-group-item { padding: 2px 4px !important; font-size: 0.65rem !important; }
-            .table-print { font-size: 0.6rem !important; margin-bottom: 8px !important; }
+            .table-print { font-size: 0.6rem !important; margin-bottom: 8px !important; width: 100% !important;}
             .table-print td, .table-print th { padding: 1px 3px !important; border: 1px solid #333 !important; }
             .table-print th { background-color: #eee !important; -webkit-print-color-adjust: exact; }
             .print-row { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; justify-content: space-between !important; width: 100% !important; margin-bottom: 5px !important; }
             .print-col-50 { width: 48% !important; display: block !important; }
-            .print-col-40 { width: 38% !important; display: block !important; }
-            .print-col-60 { width: 60% !important; display: block !important; }
-            #shapImg { max-height: 155px !important; width: auto !important; margin: 0 auto; display: block; object-fit: contain;}
+            .print-col-40 { width: 45% !important; display: block !important; } /* Diperlebar sedikit */
+            .print-col-60 { width: 52% !important; display: block !important; } /* Diperlebar sedikit */
+            #shapImg { max-height: 200px !important; width: auto !important; margin: 0 auto; display: block; object-fit: contain;}
         }
     </style>
 </head>
@@ -100,32 +101,30 @@
     <section id="informasi" class="py-5">
         <div class="container py-5">
             <h2 class="text-center section-title">Karakteristik & Batasan Sistem</h2>
-            
             <div class="row g-4 mt-2 mb-5">
                 <div class="col-lg-4">
                     <div class="info-card text-center">
                         <div class="info-icon text-primary">🔬</div>
                         <h5 class="fw-bold text-dark mb-3">Ruang Lingkup Deteksi</h5>
-                        <p class="text-muted small">Model AI dilatih untuk membedakan 4 kelas target spesifik: <strong>Normal, Immune Thrombocytopenia (ITP), Infeksi Dengue/DBD, dan Trombositosis</strong> berdasarkan fitur-fitur dari darah rutin (CBC).</p>
+                        <p class="text-muted small">Model AI dilatih untuk membedakan 4 kelas target spesifik: <strong>Normal, ITP, Infeksi Dengue/DBD, dan Trombositosis</strong> berdasarkan fitur darah rutin (CBC).</p>
                     </div>
                 </div>
                 <div class="col-lg-4">
                     <div class="info-card warning-card text-center">
                         <div class="info-icon text-warning">⚠️</div>
                         <h5 class="fw-bold text-dark mb-3">Batasan Parameter Lab</h5>
-                        <p class="text-muted small">Demi menjaga generalisasi perangkat mesin hitung konvensional, sistem ini <strong>tidak menggunakan Indeks Trombosit Lanjutan (MPV, PDW, PCT)</strong>. Analisis disubstitusi melalui kalkulasi rasio fisiologis (NLR, PLR, MLR).</p>
+                        <p class="text-muted small">Sistem ini <strong>tidak menggunakan Indeks Trombosit Lanjutan (MPV, PDW, PCT)</strong>. Analisis disubstitusi melalui kalkulasi rasio fisiologis (NLR, PLR, MLR).</p>
                     </div>
                 </div>
                 <div class="col-lg-4">
                     <div class="info-card danger-card text-center">
                         <div class="info-icon text-danger">⚖️</div>
                         <h5 class="fw-bold text-dark mb-3">Penafian Medis (Disclaimer)</h5>
-                        <p class="text-muted small">Hasil keluaran sistem merupakan <strong>skrining heuristik awal, BUKAN diagnosis definitif.</strong> Konfirmasi akhir wajib menggunakan tes serologi (IgG/IgM/NS1) atau aspirasi sumsum tulang oleh tenaga medis profesional.</p>
+                        <p class="text-muted small">Hasil keluaran merupakan <strong>skrining heuristik awal, BUKAN diagnosis definitif.</strong> Konfirmasi klinis lanjutan mutlak diperlukan.</p>
                     </div>
                 </div>
             </div>
 
-            <!-- Rincian Kompleks dalam bentuk Accordion -->
             <div class="row">
                 <div class="col-lg-10 mx-auto">
                     <h5 class="fw-bold mb-3 text-secondary text-center">Penjelasan Arsitektur Tri-Brid</h5>
@@ -134,7 +133,7 @@
                             <h2 class="accordion-header"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#col1">🤖 Pilar I: Machine Learning & Explainable AI</button></h2>
                             <div id="col1" class="accordion-collapse collapse show" data-bs-parent="#accordionInfo">
                                 <div class="accordion-body text-muted small">
-                                    Pilar utama menggunakan algoritma <strong>Regresi Logistik</strong> yang diseleksi melalui uji stabilitas <i>Mutual Information</i>. Keputusan "Black-Box" dari model ini kemudian dipecahkan oleh <strong>SHAP (SHapley Additive exPlanations)</strong> untuk memetakan patofisiologi kausal (CLIX-M), memberikan transparansi mengapa probabilitas sebuah diagnosis meningkat atau menurun akibat parameter tertentu (misal: kebocoran plasma yang ditandai dengan naiknya HCT).
+                                    Menggunakan algoritma <strong>Regresi Logistik</strong> yang keputusannya dipecahkan oleh <strong>SHAP (SHapley Additive exPlanations)</strong> untuk memetakan patofisiologi kausal (CLIX-M).
                                 </div>
                             </div>
                         </div>
@@ -143,8 +142,8 @@
                             <div id="col2" class="accordion-collapse collapse" data-bs-parent="#accordionInfo">
                                 <div class="accordion-body text-muted small">
                                     <ul class="mb-0 ps-3">
-                                        <li class="mb-2"><strong>Pilar II (Sistem Pakar Klinis):</strong> Memverifikasi keluhan fisik pasien (seperti petekie, nyeri retro-orbital, demam akut) yang merupakan ciri khas endemik DBD maupun manifestasi perdarahan autoimun pada ITP.</li>
-                                        <li><strong>Pilar III (Heuristik WHO):</strong> Menggunakan aturan kaku (Hard-rules) dari Organisasi Kesehatan Dunia (contoh: Trombositopenia absolut jika PLT &lt; 100.000, Hemokonsentrasi jika HCT &gt; 45%) untuk bertindak sebagai fungsi penalti (*guardrail*) agar AI tidak memberikan diagnosis yang menyimpang dari standar baku medis.</li>
+                                        <li class="mb-2"><strong>Pilar II:</strong> Memverifikasi keluhan fisik pasien yang menjadi ciri endemik penyakit.</li>
+                                        <li><strong>Pilar III:</strong> Menggunakan aturan kaku WHO (seperti Trombosit &lt; 100.000) sebagai pengaman algoritma.</li>
                                     </ul>
                                 </div>
                             </div>
@@ -155,39 +154,15 @@
         </div>
     </section>
 
-    <!-- SECTION 3: PANDUAN PENGGUNAAN -->
+    <!-- SECTION 3: PANDUAN -->
     <section id="panduan" class="py-5 bg-light">
         <div class="container py-5">
             <h2 class="text-center section-title">Prosedur Penggunaan</h2>
             <div class="row g-4 mt-5 pt-3">
-                <div class="col-md-3">
-                    <div class="step-box">
-                        <div class="step-circle">1</div>
-                        <h6 class="fw-bold text-primary">Input Darah Rutin</h6>
-                        <p class="text-muted small mb-0">Masukkan angka dari hasil cetak lab darah rutin (CBC). Pastikan satuan sesuai dengan formulir.</p>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="step-box">
-                        <div class="step-circle">2</div>
-                        <h6 class="fw-bold text-primary">Seleksi Simtom</h6>
-                        <p class="text-muted small mb-0">Centang manifestasi klinis yang dialami pasien (atau pilih asimptomatik jika tidak ada keluhan).</p>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="step-box">
-                        <div class="step-circle">3</div>
-                        <h6 class="fw-bold text-primary">Kalibrasi Bobot</h6>
-                        <p class="text-muted small mb-0">Secara opsional, sesuaikan persentase pengaruh antar pilar. Total ideal tidak diwajibkan 100%.</p>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="step-box">
-                        <div class="step-circle">4</div>
-                        <h6 class="fw-bold text-primary">Cetak Dokumen</h6>
-                        <p class="text-muted small mb-0">Klik eksekusi fusi, analisis grafik SHAP, dan cetak halaman ini sebagai lampiran rekam medis.</p>
-                    </div>
-                </div>
+                <div class="col-md-3"><div class="step-box"><div class="step-circle">1</div><h6 class="fw-bold text-primary">Input Darah Rutin</h6></div></div>
+                <div class="col-md-3"><div class="step-box"><div class="step-circle">2</div><h6 class="fw-bold text-primary">Seleksi Simtom</h6></div></div>
+                <div class="col-md-3"><div class="step-box"><div class="step-circle">3</div><h6 class="fw-bold text-primary">Kalibrasi Bobot</h6></div></div>
+                <div class="col-md-3"><div class="step-box"><div class="step-circle">4</div><h6 class="fw-bold text-primary">Cetak Dokumen</h6></div></div>
             </div>
         </div>
     </section>
@@ -196,7 +171,6 @@
     <section id="aplikasi" class="py-5 mt-3">
         <div class="container">
             <h2 class="text-center section-title d-print-none">Ruang Kerja CDSS</h2>
-            
             <div class="app-container">
                 <form id="cdssForm">
                     <div class="row">
@@ -252,8 +226,6 @@
             
                 <!-- ==================== AREA HASIL DIAGNOSIS & CETAK ==================== -->
                 <div class="mt-5 pt-4 border-top" id="resultArea">
-                    
-                    <!-- HEADER CETAK -->
                     <div class="text-center mb-3">
                         <h6 class="text-uppercase text-muted fw-bold tracking-wider">Hasil Diagnosis Tri-Brid CDSS</h6>
                         <h2 class="display-5 fw-bold" id="diagText">-</h2>
@@ -305,12 +277,10 @@
                         </div>
                     </div>
 
-                    <!-- CATATAN FOOTER KHUSUS PRINT -->
                     <div class="d-none d-print-block mt-3 text-center w-100" style="border-top: 1px dashed #ccc; padding-top: 5px;">
                         <i style="font-size: 0.6rem; color: #555;">Catatan: Dokumen ini merupakan hasil kalkulasi komputasional (skrining awal) dan hanya digunakan sebagai data rujukan sementara.</i>
                     </div>
 
-                    <!-- TOMBOL AKSI WEB -->
                     <div class="row mt-4 border-top pt-4 d-print-none" id="actionButtons">
                         <div class="col-12 text-center">
                             <button class="btn btn-info text-white me-3 fw-bold px-4 rounded-pill shadow-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#slideKananKalkulasi">
@@ -321,13 +291,12 @@
                             </button>
                         </div>
                     </div>
-
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- KOMPONEN SLIDE KANAN (Web UI Only) -->
+    <!-- KOMPONEN SLIDE KANAN -->
     <div class="offcanvas offcanvas-end" tabindex="-1" id="slideKananKalkulasi">
         <div class="offcanvas-header bg-light border-bottom">
             <h5 class="mb-0 text-primary fw-bold">🧮 Kalkulasi Fisiologis</h5>
@@ -339,7 +308,7 @@
         </div>
     </div>
 
-    <!-- FOOTER AKADEMIS -->
+    <!-- FOOTER -->
     <footer class="bg-dark text-white text-center py-4 mt-5 no-print d-print-none">
         <div class="container">
             <p class="mb-0 small text-white-50">© 2026 Aplikasi Prototipe CDSS Hematologi.</p>
@@ -388,30 +357,39 @@
 
                     document.getElementById('probText').innerText = result.probabilitas_final;
                     
-                    // --- ➡️ LOGIKA BARU: MENYEMBUNYIKAN PILAR JIKA BOBOT 0 ---
+                    // --- ➡️ FIX BOOTSTRAP: GUNAKAN CLASSLIST UNTUK MENIMPA D-FLEX ---
                     const breakdown = result.breakdown;
+                    const p1Container = document.getElementById("pilar-1-container");
+                    const p2Container = document.getElementById("pilar-2-container");
+                    const p3Container = document.getElementById("pilar-3-container");
                     
                     if (breakdown.hasOwnProperty("Pilar_1_ML")) {
-                        document.getElementById("pilar-1-container").style.display = "flex";
+                        p1Container.classList.remove("d-none");
+                        p1Container.classList.add("d-flex");
                         document.getElementById('val_ml').innerText = breakdown.Pilar_1_ML + "%";
                     } else {
-                        document.getElementById("pilar-1-container").style.display = "none";
+                        p1Container.classList.remove("d-flex");
+                        p1Container.classList.add("d-none");
                     }
                     
                     if (breakdown.hasOwnProperty("Pilar_2_Sym")) {
-                        document.getElementById("pilar-2-container").style.display = "flex";
+                        p2Container.classList.remove("d-none");
+                        p2Container.classList.add("d-flex");
                         document.getElementById('val_sym').innerText = breakdown.Pilar_2_Sym + "%";
                     } else {
-                        document.getElementById("pilar-2-container").style.display = "none";
+                        p2Container.classList.remove("d-flex");
+                        p2Container.classList.add("d-none");
                     }
                     
                     if (breakdown.hasOwnProperty("Pilar_3_WHO")) {
-                        document.getElementById("pilar-3-container").style.display = "flex";
+                        p3Container.classList.remove("d-none");
+                        p3Container.classList.add("d-flex");
                         document.getElementById('val_who').innerText = breakdown.Pilar_3_WHO + "%";
                     } else {
-                        document.getElementById("pilar-3-container").style.display = "none";
+                        p3Container.classList.remove("d-flex");
+                        p3Container.classList.add("d-none");
                     }
-                    // --------------------------------------------------------
+                    // ----------------------------------------------------------------
 
                     document.getElementById('shapImg').src = "data:image/png;base64," + result.shap_image;
                     
