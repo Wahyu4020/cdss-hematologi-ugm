@@ -458,12 +458,29 @@
                         sympHTML += '</ul>';
                         document.getElementById('symptomsInject').innerHTML = sympHTML;
 
-                        let plt = getVal('plt'); let wbc = getVal('wbc'); let hct = calcData["Hematokrit (HCT)"];
+                        // ➡️ AMBIL DATA UMUR DAN GENDER
+                        let plt = getVal('plt'); 
+                        let wbc = getVal('wbc'); 
+                        let hct = calcData["Hematokrit (HCT)"];
+                        let ageVal = getVal('Age');
+                        let genderVal = getVal('Gender');
+
+                        // ➡️ SINKRONISASI BATAS HCT DENGAN BACKEND
+                        let hct_limit = (genderVal === 1) ? 50.0 : 46.0;
+                        
+                        // ➡️ SINKRONISASI BATAS WBC DENGAN BACKEND
+                        let wbc_min = 4.0; // Default Dewasa
+                        if (ageVal !== null) {
+                            if (ageVal < 1.0) wbc_min = 6.0; // Bayi
+                            else if (ageVal <= 12.0) wbc_min = 5.0; // Anak
+                        }
+
+                        // ➡️ RENDER TABEL DINAMIS
                         let whoHTML = `<table class="table table-print table-sm text-center mb-0">
-                            <tr class="bg-light"><th>Kriteria Heuristik</th><th>Ambang Batas</th><th>Nilai Pasien</th><th>Status</th></tr>
+                            <tr class="bg-light"><th>Kriteria Heuristik</th><th>Ambang Batas Dinamis</th><th>Nilai Pasien</th><th>Status</th></tr>
                             <tr><td class="text-start">Trombositopenia</td><td>< 100</td><td>${fmt(plt)}</td><td>${plt !== null && plt < 100 ? '✅ Ya' : '❌ Tdk'}</td></tr>
-                            <tr><td class="text-start">Leukopenia</td><td>< 5.0</td><td>${fmt(wbc)}</td><td>${wbc !== null && wbc < 5.0 ? '✅ Ya' : '❌ Tdk'}</td></tr>
-                            <tr><td class="text-start">Hemokonsentrasi</td><td>> 45%</td><td>${fmt(hct)}</td><td>${hct !== null && hct > 45 ? '✅ Ya' : '❌ Tdk'}</td></tr>
+                            <tr><td class="text-start">Leukopenia (Sesuai Umur)</td><td>< ${wbc_min.toFixed(1)}</td><td>${fmt(wbc)}</td><td>${wbc !== null && wbc < wbc_min ? '✅ Ya' : '❌ Tdk'}</td></tr>
+                            <tr><td class="text-start">Hemokonsentrasi (Sesuai Gender)</td><td>> ${hct_limit}%</td><td>${fmt(hct)}</td><td>${hct !== null && hct > hct_limit ? '✅ Ya' : '❌ Tdk'}</td></tr>
                             <tr><td class="text-start">Trombositosis</td><td>> 450</td><td>${fmt(plt)}</td><td>${plt !== null && plt > 450 ? '✅ Ya' : '❌ Tdk'}</td></tr>
                         </table>`;
                         document.getElementById('whoInject').innerHTML = whoHTML;
