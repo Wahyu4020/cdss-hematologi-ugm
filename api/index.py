@@ -57,7 +57,6 @@ SYMPTOM_WEIGHTS = {
     "Asimptomatik (tidak ada keluhan klinis)": [0.50, 0.0, 0.0, 0.0]
 }
 
-# Mapping Pintar untuk menjembatani Frontend ke Model Machine Learning
 MAP_WEB_TO_DATASET = {
     'gender': 'L/P', 'age': 'Umur', 'hb': 'HB', 'rbc': 'RBC', 'mcv': 'MCV',
     'rdw': 'RDW', 'wbc': 'WBC', 'plt': 'PLT', 'neu': 'NEU%', 'lym': 'LYM%',
@@ -80,8 +79,6 @@ except Exception as e:
 def serve_frontend():
     return FileResponse("index.html")
 
-# ─── SCHEMA INPUT DARI WEB ───────────────────────────────────────────────────
-# ─── SCHEMA INPUT DARI WEB ───────────────────────────────────────────────────
 # ─── SCHEMA INPUT DARI WEB ───────────────────────────────────────────────────
 class PatientInput(BaseModel):
     Gender: Union[float, str, None] = None
@@ -130,105 +127,94 @@ def pillar_ii_symptom_score(selected_symptoms):
     return np.ones(4) / 4.0
 
 def get_detailed_explanation(feature_name, shap_value, pred_class, raw_val):
-    direction = "mendorong ke arah" if shap_value > 0 else "menahan/mengurangi risiko"
+    direction = "mendorong probabilitas" if shap_value > 0 else "menahan/mengurangi risiko"
     feat_upper = feature_name.upper()
     
-    # Cetak nama fitur beserta nilai aslinya di UI
     base_text = f"**{feat_upper} ({round(raw_val, 2)}):** Nilai ini {direction} keputusan diagnosis."
     
-    # ─── LOGIKA PLT (TROMBOSIT) ───
+    # ─── 1. TROMBOSIT (PLT) ───
     if feat_upper == "PLT":
         if raw_val < 150:
-            if pred_class == 1: # ITP
-                return base_text + " Penurunan trombosit (trombositopenia) terisolasi merupakan tanda khas ITP (Immune Thrombocytopenia), di mana sistem imun secara keliru menghancurkan keping darah tanpa penyebab infeksi yang jelas."
-            elif pred_class == 2: # DENGUE
-                return base_text + " Penurunan trombosit sangat lazim pada infeksi virus Dengue akibat supresi sumsum tulang secara langsung oleh virus dan destruksi keping darah di sirkulasi perifer."
-            else:
-                return base_text + " Penurunan keping darah mengindikasikan adanya gangguan produksi pada sumsum tulang atau tingginya tingkat destruksi perifer."
-        elif raw_val > 450:
-            if pred_class == 3: # TROMBOSITOSIS
-                return base_text + " Produksi trombosit yang berlebihan (trombositosis) mengonfirmasi hiperaktivitas sumsum tulang, yang berpotensi merujuk pada kelainan mieloproliferatif."
-            else:
-                return base_text + " Peningkatan keping darah di atas rentang fisiologis menandakan adanya anomali pada aktivitas produksi megakariosit di dalam sumsum tulang."
-        else:
-            return base_text + " Jumlah trombosit pasien berada pada rentang fisiologis normal, menunjukkan fungsi hemostasis primer yang stabil."
+            if pred_class == 1: return base_text + " Penurunan trombosit (trombositopenia) terisolasi adalah tanda khas ITP akibat destruksi keping darah oleh autoimun."
+            elif pred_class == 2: return base_text + " Trombositopenia sangat lazim pada fase akut Dengue akibat supresi sumsum tulang dan destruksi perifer."
+            else: return base_text + " Trombositopenia mengindikasikan tingginya tingkat destruksi keping darah atau kegagalan produksi."
+        elif raw_val > 450: return base_text + " Peningkatan trombosit (trombositosis) mengonfirmasi hiperaktivitas sumsum tulang, sering muncul sebagai respons reaktif terhadap inflamasi sistemik."
+        else: return base_text + " Jumlah trombosit berada dalam rentang normal, menunjukkan fungsi hemostasis primer yang stabil."
                 
-    # ─── LOGIKA WBC (LEUKOSIT) ───
+    # ─── 2. LEUKOSIT (WBC) ───
     elif feat_upper == "WBC":
         if raw_val < 4.0:
-            if pred_class == 2: # DENGUE
-                return base_text + " Penurunan sel darah putih (leukopenia) merupakan penanda awal yang sangat khas pada fase akut infeksi virus seperti Dengue."
-            else:
-                return base_text + " Leukopenia dapat terjadi akibat penyakit penekanan imun, malnutrisi, toksisitas obat, atau supresi sumsum tulang."
-        elif raw_val > 11.0:
-            return base_text + " Peningkatan sel darah putih (leukositosis) menandakan respons imun tubuh yang aktif untuk melawan infeksi bakteri atau inflamasi hebat."
-        else:
-            if pred_class == 1: # ITP
-                return base_text + " Pada ITP, kelainan hematologi umumnya murni hanya terjadi pada keping darah, sehingga nilai WBC yang normal ini turut memperkuat tegaknya diagnosis ITP."
-            return base_text + " Jumlah leukosit yang berada dalam rentang fisiologis menandakan produksi sel imun bawaan tidak mengalami gangguan."
+            if pred_class == 2: return base_text + " Penurunan sel darah putih (leukopenia) merupakan penanda patognomonik awal pada infeksi virus akut seperti Dengue."
+            else: return base_text + " Leukopenia dapat terjadi akibat supresi sumsum tulang atau efek toksik sistemik."
+        elif raw_val > 11.0: return base_text + " Peningkatan sel darah putih (leukositosis) menandakan respons imun tubuh yang sangat aktif akibat infeksi bakteri atau inflamasi hebat."
+        else: return base_text + " Jumlah leukosit dalam rentang fisiologis menandakan fungsi imunitas bawaan beroperasi normal."
 
-    # ─── LOGIKA RBC (ERITROSIT) ───
-    elif feat_upper == "RBC":
-        if raw_val > 5.5 and pred_class == 2: # DENGUE
-            return base_text + " Peningkatan eritrosit (hemokonsentrasi) merupakan tanda bahaya (danger sign) pada Dengue yang menunjukkan adanya sindrom kebocoran plasma darah."
-        elif raw_val < 4.0:
-            return base_text + " Penurunan eritrosit merupakan penanda kondisi anemia, riwayat perdarahan, atau gangguan produksi sel darah merah."
-        else:
-            return base_text + " Jumlah eritrosit terpantau berada pada ambang batas normal."
+    # ─── 3. HEMOGLOBIN (HB) & HEMATOKRIT (HCT) ───
+    elif feat_upper == "HB":
+        if raw_val < 12.0: return base_text + " Penurunan kadar hemoglobin (anemia) dapat diakibatkan oleh komplikasi perdarahan klinis atau defisiensi zat besi."
+        elif raw_val > 16.0: return base_text + " Kadar hemoglobin di atas normal mengindikasikan polisitemia atau hemokonsentrasi akibat dehidrasi/kebocoran plasma."
+        else: return base_text + " Kadar hemoglobin normal menandakan kapasitas transportasi oksigen sistemik tidak terganggu."
             
-    # ─── LOGIKA INDEKS ERITROSIT REDUNDAN (MCV, MCH, MCHC) ───
+    elif feat_upper == "HCT":
+        if raw_val < 35: return base_text + " Penurunan hematokrit mencerminkan kondisi hemodilusi (kelebihan cairan) atau anemia seluler."
+        elif raw_val > 45 and pred_class == 2: return base_text + " Peningkatan hematokrit (hemokonsentrasi) adalah tanda bahaya mutlak pada Dengue yang merepresentasikan sindrom kebocoran plasma."
+        elif raw_val > 45: return base_text + " Hematokrit tinggi menandakan tingginya viskositas (kekentalan) darah."
+        else: return base_text + " Viskositas dan persentase volume sel darah merah terpantau seimbang."
+
+    # ─── 4. ERITROSIT (RBC) ───
+    elif feat_upper == "RBC":
+        if raw_val < 4.0: return base_text + " Penurunan hitung eritrosit memperkuat indikasi anemia, riwayat perdarahan, atau supresi pembentukan darah merah."
+        elif raw_val > 5.5: return base_text + " Peningkatan hitung eritrosit menandakan hiperaktivitas eritropoiesis atau hemokonsentrasi."
+        else: return base_text + " Jumlah eritrosit berada pada ambang batas fisiologis yang sehat."
+            
+    # ─── 5. INDEKS ERITROSIT (MCV, MCH, MCHC, RDW) ───
     elif feat_upper == "MCV":
-        redundansi_mcv = " Sebagai parameter turunan, MCV merupakan cerminan matematis dari rasio antara Hematokrit (HCT) dan jumlah absolut eritrosit (RBC)."
-        if raw_val < 80:
-            return base_text + redundansi_mcv + " MCV yang rendah (mikrositik) sering menjadi rujukan adanya penyakit penyerta seperti anemia defisiensi besi atau talasemia."
-        elif raw_val > 100:
-            return base_text + redundansi_mcv + " MCV yang tinggi (makrositik) mengindikasikan kemungkinan defisiensi vitamin B12/folat atau penyakit hati."
-        else:
-            return base_text + redundansi_mcv + " Nilai dalam rentang normal menunjukkan ukuran sel darah merah yang proporsional (normositik)."
+        if raw_val < 80: return base_text + " MCV rendah (mikrositik) sering menjadi rujukan penyakit penyerta seperti anemia defisiensi besi."
+        elif raw_val > 100: return base_text + " MCV tinggi (makrositik) mengindikasikan kemungkinan defisiensi B12/folat."
+        else: return base_text + " Ukuran sel darah merah proporsional (normositik)."
             
     elif feat_upper == "MCH":
-        redundansi_mch = " Secara fisiologis, parameter ini berkorelasi langsung dengan perhitungan rasio massa Hemoglobin (HB) terhadap jumlah eritrosit (RBC)."
-        if raw_val < 27:
-            return base_text + redundansi_mch + " Nilai MCH yang rendah merepresentasikan sel darah merah yang hipokromik (pucat) karena kekurangan kadar hemoglobin intraseluler."
-        else:
-            return base_text + redundansi_mch + " Kepadatan hemoglobin per sel darah merah terpantau berada dalam batas wajar."
+        if raw_val < 27: return base_text + " MCH rendah merepresentasikan sel darah merah yang hipokromik (pucat) akibat kurangnya massa hemoglobin."
+        elif raw_val > 33: return base_text + " MCH tinggi (hiperkromik) umumnya sejalan dengan membesarnya ukuran sel darah merah (makrositik)."
+        else: return base_text + " Kepadatan hemoglobin per sel darah merah terpantau normokromik."
             
     elif feat_upper == "MCHC":
-        redundansi_mchc = " Indeks ini merupakan kalkulasi redundan dari perbandingan antara kadar Hemoglobin (HB) dan persentase Hematokrit (HCT)."
-        if raw_val < 32:
-            return base_text + redundansi_mchc + " Penurunan konsentrasi ini mengonfirmasi kondisi hipokromia pada eritrosit pasien."
-        else:
-            return base_text + redundansi_mchc + " Konsentrasi hemoglobin intraseluler terpantau seimbang dengan volume sel darah merah (normokromik)."
+        if raw_val < 32: return base_text + " Penurunan MCHC mengonfirmasi kondisi hipokromia absolut."
+        elif raw_val > 36: return base_text + " MCHC sangat tinggi dapat mengindikasikan sferositosis autoimun atau hemolisis."
+        else: return base_text + " Konsentrasi hemoglobin intraseluler seimbang dengan volume sel."
 
-    # ─── LOGIKA DIFERENSIAL LEUKOSIT ───
-    elif feat_upper == "ABS_LYM":
-        if pred_class == 2: # DENGUE
-            return base_text + " Fluktuasi limfosit secara klinis erat kaitannya dengan mobilisasi sistem imunitas adaptif untuk merespons replikasi virus Dengue di dalam tubuh."
-        else:
-            return base_text + " Limfosit berperan penting dalam kekebalan humoral untuk merespons penyakit virus atau inflamasi imunologis."
-            
+    elif feat_upper == "RDW":
+        if raw_val > 14.5: return base_text + " RDW tinggi (anisositosis) menunjukkan variasi ukuran sel darah merah yang abnormal, sangat berkaitan dengan stres inflamasi kronis atau pemulihan perdarahan."
+        elif raw_val < 11.5: return base_text + " RDW rendah menunjukkan sel darah merah yang sangat seragam."
+        else: return base_text + " Distribusi ukuran eritrosit normal dan seragam."
+
+    # ─── 6. DIFERENSIAL LEUKOSIT ABSOLUT ───
     elif feat_upper == "ABS_NEU":
-        if raw_val < 2.0 and pred_class == 2: # DENGUE
-            return base_text + " Penurunan neutrofil (neutropenia) sering menyertai fase akut infeksi virus akibat supresi sementara pada sumsum tulang."
-        elif raw_val > 7.5:
-            return base_text + " Peningkatan neutrofil (neutrofilia) adalah respons garda terdepan terhadap adanya infeksi bakteri piogenik atau trauma jaringan."
+        if raw_val < 2.0: return base_text + " Penurunan neutrofil (neutropenia) sangat khas terjadi pada fase akut infeksi virus akibat supresi sumsum tulang."
+        elif raw_val > 7.5: return base_text + " Peningkatan neutrofil (neutrofilia) adalah respons garda terdepan sistem imun terhadap bakteri piogenik atau peradangan jaringan."
+        else: return base_text + " Jumlah neutrofil normal menandakan tidak ada lonjakan infeksi bakteri."
             
+    elif feat_upper == "ABS_LYM":
+        if raw_val < 1.0: return base_text + " Limfopenia (penurunan limfosit) adalah respons awal imunitas akibat stres infeksi virus sistemik yang parah."
+        elif raw_val > 4.0: return base_text + " Limfositosis mengindikasikan mobilisasi aktif imunitas adaptif (sel T dan sel B) untuk membersihkan sisa virus atau fase pemulihan infeksi."
+        else: return base_text + " Jumlah limfosit berada dalam batas kekebalan adaptif yang normal."
+
     elif feat_upper == "ABS_MON":
-        return base_text + " Monosit bertindak sebagai fagosit pembersih; peningkatannya sering terlihat pada fase pemulihan infeksi akut atau peradangan kronis."
+        if raw_val < 0.2: return base_text + " Monositopenia menunjukkan penurunan sel fagosit, sering kali terjadi pada infeksi akut parah."
+        elif raw_val > 0.8: return base_text + " Monositosis menunjukkan hiperaktivitas makrofag pembersih jaringan, yang umum pada masa pemulihan inflamasi."
+        else: return base_text + " Kadar monosit normal."
         
     elif feat_upper == "ABS_EOS":
-        return base_text + " Fluktuasi eosinofil merupakan respons biologis yang lazim pada reaksi alergi, infeksi parasit, atau dermatitis atopik."
+        if raw_val < 0.05: return base_text + " Eosinopenia adalah temuan reaktif terhadap stres akut primer atau inflamasi sistemik."
+        elif raw_val > 0.5: return base_text + " Eosinofilia umumnya merupakan penanda biologi khas untuk reaksi alergi atau infeksi parasit."
+        else: return base_text + " Kadar eosinofil wajar tanpa indikasi alergi."
         
-    # ─── LOGIKA RASIO INFLAMASI REDUNDAN (NLR, PLR, MLR) ───
+    # ─── 7. RASIO INFLAMASI (NLR, PLR, MLR) ───
     elif feat_upper in ["NLR", "PLR", "MLR"]:
-        if feat_upper == "NLR":
-            korelasi_rasio = " Rasio ini secara langsung diturunkan dari perbandingan nilai absolut Neutrofil terhadap Limfosit."
-        elif feat_upper == "PLR":
-            korelasi_rasio = " Rasio ini secara langsung diturunkan dari perbandingan jumlah absolut Trombosit (PLT) terhadap Limfosit."
-        else:
-            korelasi_rasio = " Rasio ini secara langsung diturunkan dari perbandingan nilai absolut Monosit terhadap Limfosit."
-            
-        return base_text + korelasi_rasio + " Fitur turunan antar-sel darah ini digunakan oleh model sebagai biomarker prediktif tambahan untuk menilai derajat keparahan inflamasi sistemik secara komprehensif."
+        korelasi = "NLR (Rasio Neutrofil/Limfosit)" if feat_upper == "NLR" else "PLR (Rasio Trombosit/Limfosit)" if feat_upper == "PLR" else "MLR (Rasio Monosit/Limfosit)"
+        if raw_val > 3.0: return base_text + f" Nilai {korelasi} yang tinggi secara literatur digunakan sebagai biomarker prediktif kuat adanya derajat keparahan inflamasi sistemik pada pasien."
+        elif raw_val < 1.0: return base_text + f" Nilai {korelasi} yang sangat rendah sering mengikuti pola limfositosis relatif pada infeksi virus."
+        else: return base_text + f" {korelasi} berada dalam batas keseimbangan (ekuilibrium) fisiologis."
         
     return base_text
 
@@ -236,7 +222,6 @@ def get_detailed_explanation(feature_name, shap_value, pred_class, raw_val):
 @app.post("/api/predict")
 def predict_diagnosis(data: PatientInput):
     try:
-        # Konversi Input (Mengubah Kosong atau "-" menjadi NaN)
         if hasattr(data, "model_dump"):
             raw_input = data.model_dump(exclude={"symptoms", "weight_ml", "weight_sym", "weight_who"})
         else:
@@ -248,23 +233,18 @@ def predict_diagnosis(data: PatientInput):
             if v is None or val_str in ["", "-"]:
                 raw_dict[k.lower()] = np.nan
             else:
-                try:
-                    raw_dict[k.lower()] = float(v)
-                except ValueError:
-                    raw_dict[k.lower()] = np.nan
+                try: raw_dict[k.lower()] = float(v)
+                except ValueError: raw_dict[k.lower()] = np.nan
                     
         raw_df = pd.DataFrame([raw_dict])
         
-        # 1. Kalkulasi Fisiologis
         cbc_calc = CBCCalculatorTransformer()
         cbc_calc.fit(raw_df) 
         engineered_df = cbc_calc.transform(raw_df)
         
-        # 2. Penyelarasan Nama Kolom
         engineered_df.columns = [c.lower() for c in engineered_df.columns]
         engineered_df = engineered_df.rename(columns=MAP_WEB_TO_DATASET)
         
-        # 3. Penyelarasan Bentuk Matriks
         expected_features = list(scaler.feature_names_in_)
         aligned_df = pd.DataFrame(columns=expected_features)
         aligned_df.loc[0] = np.nan
@@ -273,36 +253,27 @@ def predict_diagnosis(data: PatientInput):
             if expected_col in engineered_df.columns:
                 aligned_df.at[0, expected_col] = engineered_df.iloc[0][expected_col]
         
-        # 4. Pra-pemrosesan (Scaling dan Imputasi)
         scaled_data = scaler.transform(aligned_df)
         imputed_data = imputer.transform(scaled_data)
         final_df = pd.DataFrame(imputed_data, columns=expected_features)
         
-        # ➡️ INVERSE TRANSFORM: Mengembalikan data ke angka asli pasien untuk generator teks
         raw_imputed_data = scaler.inverse_transform(final_df)
         raw_imputed_df = pd.DataFrame(raw_imputed_data, columns=expected_features)
         
-        # 5. Filter Spesifik 10 Fitur Model Regresi Logistik
         target_features = ['PLT', 'MCV', 'PLR', 'HCT', 'HB', 'WBC', 'ABS_NEU', 'RDW', 'ABS_EOS', 'NLR']
         ml_features = [exp_col for tf in target_features for exp_col in expected_features if tf.lower() == exp_col.lower()]
         ml_input_df = final_df[ml_features]
         
-        # 6. Prediksi Machine Learning
         p_ml = ml_model.predict_proba(ml_input_df.values)[0]
         if len(p_ml) > 4: p_ml = p_ml[:4]
         if len(p_ml) < 4: p_ml = np.pad(p_ml, (0, 4 - len(p_ml)))
         p_ml = p_ml / p_ml.sum()
         
-        # 7. Fusi Tri-Brid CDSS (Evaluasi Gejala & Aturan WHO)
         hct_calc = float(engineered_df['HCT'].iloc[0]) if pd.notna(engineered_df['HCT'].iloc[0]) else np.nan
-        
-        # Pengamanan jika symptoms dikirim sebagai None
         safe_symptoms = data.symptoms if data.symptoms is not None else []
         p_sym = pillar_ii_symptom_score(safe_symptoms)
-        
         p_who = pillar_iii_who_rules(raw_dict["plt"], raw_dict["wbc"], hct_calc)
         
-        # Konversi paksa string dari frontend ke float dengan nilai default
         try: w_ml = float(data.weight_ml) / 100.0
         except: w_ml = 0.55
         try: w_sym = float(data.weight_sym) / 100.0
@@ -312,10 +283,8 @@ def predict_diagnosis(data: PatientInput):
         
         p_final = (w_ml * p_ml) + (w_sym * p_sym) + (w_who * p_who)
         if p_final.sum() > 0: p_final = p_final / p_final.sum()
-        
         pred_class = int(np.argmax(p_final))
         
-        # 8. Analisis SHAP Linear
         background_data = pd.DataFrame(np.zeros((1, len(ml_features))), columns=ml_features)
         explainer = shap.Explainer(ml_model, background_data)
         shap_explanation = explainer(ml_input_df)
@@ -326,46 +295,28 @@ def predict_diagnosis(data: PatientInput):
         else:
             if len(shap_explanation.values.shape) == 3:
                 sv_class = shap_explanation.values[0, :, pred_class]
-                if len(np.array(shap_explanation.base_values).shape) == 2:
-                    base_val = shap_explanation.base_values[0, pred_class]
-                else:
-                    base_val = shap_explanation.base_values[pred_class]
+                base_val = shap_explanation.base_values[0, pred_class] if len(np.array(shap_explanation.base_values).shape) == 2 else shap_explanation.base_values[pred_class]
             else:
                 sv_class = shap_explanation.values[0]
                 base_val = shap_explanation.base_values[0]
 
-        single_expl = shap.Explanation(
-            values=sv_class, 
-            base_values=base_val, 
-            data=ml_input_df.iloc[0].values, 
-            feature_names=ml_features
-        )
+        single_expl = shap.Explanation(values=sv_class, base_values=base_val, data=ml_input_df.iloc[0].values, feature_names=ml_features)
         
-        # 9. Visualisasi SHAP
-        plt.figure(figsize=(8, 4.5))
-        shap.plots.waterfall(single_expl, max_display=7, show=False)
+        # ➡️ SHAP VISUALISASI DIPERBARUI: Tinggi 6 dan tampilkan 10 fitur
+        plt.figure(figsize=(8, 6))
+        shap.plots.waterfall(single_expl, max_display=10, show=False)
         buf = io.BytesIO()
         plt.savefig(buf, format="png", dpi=100, bbox_inches='tight')
         buf.seek(0)
         image_base64 = base64.b64encode(buf.read()).decode('utf-8')
         plt.close()
         
-        # 10. Pembangkit Teks Eksplanasi (CLIX-M)
         sv_vals = single_expl.values
-        sorted_idx = np.argsort(np.abs(sv_vals))[::-1][:3]
-        explanations = []
-        for idx in sorted_idx:
-            feat_name = ml_features[idx]
-            
-            # ➡️ PERBAIKAN: Mengambil angka medis asli yang belum diskala
-            raw_val = raw_imputed_df.iloc[0][feat_name] 
-            
-            explanations.append(get_detailed_explanation(feat_name, sv_vals[idx], pred_class, raw_val))
-            
-        # 11. Bukti Komputasi
-        def safe_round(val):
-            return round(float(val), 2) if pd.notna(val) else "N/A"
-            
+        # ➡️ PENJELASAN NARASI DIPERBARUI: Ambil 5 fitur teratas
+        sorted_idx = np.argsort(np.abs(sv_vals))[::-1][:5]
+        explanations = [get_detailed_explanation(ml_features[idx], sv_vals[idx], pred_class, raw_imputed_df.iloc[0][ml_features[idx]]) for idx in sorted_idx]
+        
+        def safe_round(val): return round(float(val), 2) if pd.notna(val) else "N/A"
         calc_results = {
             "Hematokrit (HCT)": safe_round(engineered_df['HCT'].iloc[0]),
             "Mean Corpuscular Hemoglobin (MCH)": safe_round(engineered_df['MCH'].iloc[0]),
@@ -379,23 +330,18 @@ def predict_diagnosis(data: PatientInput):
             "Monocyte-Lymphocyte Ratio (MLR)": safe_round(engineered_df['MLR'].iloc[0])
         }
         
-        # ➡️ PERBAIKAN: Breakdown Dinamis berdasarkan input bobot (Weight)
         breakdown_dict = {}
         if w_ml > 0: breakdown_dict["Pilar_1_ML"] = round(float(p_ml[pred_class]*100), 2)
         if w_sym > 0: breakdown_dict["Pilar_2_Sym"] = round(float(p_sym[pred_class]*100), 2)
         if w_who > 0: breakdown_dict["Pilar_3_WHO"] = round(float(p_who[pred_class]*100), 2)
             
         return {
-            "status": "success",
-            "diagnosis": CLASS_NAMES[pred_class],
+            "status": "success", "diagnosis": CLASS_NAMES[pred_class],
             "probabilitas_final": round(float(p_final[pred_class]*100), 2),
-            "breakdown": breakdown_dict, # Hanya berisi pilar yang bobotnya > 0
-            "shap_image": image_base64,
-            "clix_m_text": explanations,
-            "kalkulasi_fisiologis": calc_results 
+            "breakdown": breakdown_dict, "shap_image": image_base64,
+            "clix_m_text": explanations, "kalkulasi_fisiologis": calc_results 
         }
         
     except Exception as e:
-        import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
