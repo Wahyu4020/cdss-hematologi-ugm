@@ -106,26 +106,22 @@ def pillar_iii_who_rules(plt_val, wbc_val, hct_val, gender_val, age_val):
     raw = np.zeros(4, dtype=float)
     
     # ─── LOGIKA HEMATOKRIT BERDASARKAN GENDER ───
-    # Laki-laki = 50%, Perempuan/Default = 46%
     hct_limit = 50.0 if gender_val == 1.0 else 46.0
     
     # ─── LOGIKA LEUKOSIT (WBC) BERDASARKAN UMUR ───
     if not np.isnan(age_val) and age_val < 1.0:
-        # Bayi (< 1 tahun): Ambang bawah leukopenia 6.0
         wbc_min, wbc_max = 6.0, 17.0
     elif not np.isnan(age_val) and age_val <= 12.0:
-        # Anak-anak (1 - 12 tahun): Ambang bawah leukopenia 5.0
         wbc_min, wbc_max = 5.0, 13.0
     else:
-        # Dewasa (> 12 tahun) atau umur tidak diisi: Ambang bawah 4.0
         wbc_min, wbc_max = 4.0, 11.0
     
-    # 1. ATURAN DENGUE (Trombosit <= 100, Leukopenia Dinamis, Hemokonsentrasi Dinamis)
+    # 1. ATURAN DENGUE
     if plt_val < 100 and wbc_val < wbc_min and hct_val > hct_limit: raw[2] = 1.0  
     elif plt_val < 100 and wbc_val < wbc_min: raw[2] = 0.6  
     elif plt_val < 100 and hct_val > hct_limit: raw[2] = 0.4  
     
-    # 2. ATURAN ITP (Trombosit < 100, WBC Normal Dinamis, HCT Normal)
+    # 2. ATURAN ITP
     if plt_val < 100 and wbc_min <= wbc_val <= wbc_max and 35 <= hct_val <= hct_limit: raw[1] = 1.0
     elif plt_val < 100 and raw[2] == 0: raw[1] = 0.5  
     
@@ -133,7 +129,7 @@ def pillar_iii_who_rules(plt_val, wbc_val, hct_val, gender_val, age_val):
     if plt_val > 600: raw[3] = 1.0
     elif plt_val > 450: raw[3] = 0.7
     
-    # 4. ATURAN NORMAL (Rentang Fisiologis Dinamis)
+    # 4. ATURAN NORMAL
     if (150 <= plt_val <= 400) and (wbc_min <= wbc_val <= wbc_max) and (35 <= hct_val <= hct_limit): raw[0] = 1.0
     elif raw.sum() == 0: raw[0] = 0.3  
     
@@ -154,10 +150,21 @@ def pillar_ii_symptom_score(selected_symptoms):
 
 
 def get_detailed_explanation(feature_name, shap_value, pred_class, raw_val):
-    direction = "mendorong probabilitas" if shap_value > 0 else "menahan/mengurangi risiko"
     feat_upper = feature_name.upper()
     
-    base_text = f"**{feat_upper} ({round(raw_val, 2)}):** Nilai ini {direction} keputusan diagnosis."
+    # ➡️ LOGIKA CERDAS ARAH PENJELASAN SHAP
+    if pred_class == 0:  # Jika Prediksi NORMAL
+        if shap_value > 0:
+            direction = "memperkuat probabilitas bahwa pasien dalam kondisi Normal."
+        else:
+            direction = "sedikit menurunkan keyakinan sistem, karena nilai ini menyimpang dari titik rata-rata pasien sehat di dalam dataset."
+    else:  # Jika Prediksi PENYAKIT (ITP, Dengue, Trombositosis)
+        if shap_value > 0:
+            direction = "mendorong/meningkatkan probabilitas diagnosis penyakit ini."
+        else:
+            direction = "menahan/mengurangi probabilitas diagnosis penyakit ini."
+            
+    base_text = f"**{feat_upper} ({round(raw_val, 2)}):** Nilai ini {direction}"
     
     # ─── 1. TROMBOSIT (PLT) ───
     if feat_upper == "PLT":
@@ -340,7 +347,7 @@ def predict_diagnosis(data: PatientInput):
 
         single_expl = shap.Explanation(values=sv_class, base_values=base_val, data=ml_input_df.iloc[0].values, feature_names=ml_features)
         
-        # VISUALISASI SHAP DIPERBESAR
+        # ➡️ SHAP VISUALISASI BERKUALITAS TINGGI
         plt.figure(figsize=(10, 7))
         shap.plots.waterfall(single_expl, max_display=10, show=False)
         buf = io.BytesIO()
@@ -350,7 +357,7 @@ def predict_diagnosis(data: PatientInput):
         plt.close()
         
         sv_vals = single_expl.values
-        # AMBIL 5 FITUR UNTUK NARASI
+        # ➡️ AMBIL 5 FITUR UNTUK NARASI
         sorted_idx = np.argsort(np.abs(sv_vals))[::-1][:5]
         explanations = [get_detailed_explanation(ml_features[idx], sv_vals[idx], pred_class, raw_imputed_df.iloc[0][ml_features[idx]]) for idx in sorted_idx]
         
