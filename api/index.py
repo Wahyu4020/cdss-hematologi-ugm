@@ -3,37 +3,43 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional, Union
 from sklearn.base import BaseEstimator, TransformerMixin
-import joblib
 import shap
 import os
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 import io
+import json
+import pickle
 import base64
 import traceback
+import numpy as np
+import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
 
 # ─── CLASS TRANSFORMER ───────────────────────────────────────────────────────
+# Menghitung fitur turunan dan mengembalikan seluruh kolom dengan nama dataset.
+# Persentase hitung jenis (NEU%, LYM%, MON%, EOS%) ikut diteruskan karena
+# LYM% merupakan salah satu fitur model final.
 class CBCCalculatorTransformer(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
-        self.output_features_ = [
-            'gender', 'age', 'hb', 'rbc', 'hct', 'mcv', 'mch', 'mchc', 'rdw','plt', 'wbc', 'abs_neu', 'abs_lym', 'abs_mon', 'abs_eos', 'nlr', 'plr', 'mlr'
-        ]
         return self
 
     def transform(self, X):
-        X_calc = X.copy()
-        X_calc['hct'] = (X_calc['rbc'] * X_calc['mcv']) / 10
-        X_calc['mch'] = np.where(X_calc['rbc'] > 0, (X_calc['hb'] / X_calc['rbc']) * 10, 0)
-        X_calc['mchc'] = np.where(X_calc['hct'] > 0, (X_calc['hb'] / X_calc['hct']) * 100, 0)
-        X_calc['abs_neu'] = (X_calc['neu'] / 100.0) * X_calc['wbc']
-        X_calc['abs_lym'] = (X_calc['lym'] / 100.0) * X_calc['wbc']
-        X_calc['abs_mon'] = (X_calc['mon'] / 100.0) * X_calc['wbc']
-        X_calc['abs_eos'] = (X_calc['eos'] / 100.0) * X_calc['wbc']
-        X_calc['nlr'] = np.where(X_calc['abs_lym'] > 0, X_calc['abs_neu'] / X_calc['abs_lym'], 0)
-        X_calc['plr'] = np.where(X_calc['abs_lym'] > 0, X_calc['plt'] / X_calc['abs_lym'], 0)
-        X_calc['mlr'] = np.where(X_calc['abs_lym'] > 0, X_calc['abs_mon'] / X_calc['abs_lym'], 0)
-        return X_calc[self.output_features_]
+        X = X.copy()
+        rbc, hb, mcv, wbc = X["rbc"], X["hb"], X["mcv"], X["wbc"]
+        X["hct"] = rbc * mcv / 10
+        X["mch"] = np.where(rbc > 0, hb / rbc * 10, np.nan)
+        X["mchc"] = np.where(X["hct"] > 0, hb / X["hct"] * 100, np.nan)
+        for k in ["neu", "lym", "mon", "eos"]:
+            X[f"abs_{k}"] = X[k] / 100.0 * wbc
+        lym_ok = X["abs_lym"] > 0
+        # Rasio tidak terdefinisi bila limfosit absolut <= 0: diisi NaN (bukan 0)
+        X["nlr"] = np.where(lym_ok, X["abs_neu"] / X["abs_lym"], np.nan)
+        X["plr"] = np.where(lym_ok, X["plt"] / X["abs_lym"], np.nan)
+        X["mlr"] = np.where(lym_ok, X["abs_mon"] / X["abs_lym"], np.nan)
+        return X.rename(columns=MAP_WEB_TO_DATASET)
+
 
 # ─── INISIALISASI & KONSTANTA ────────────────────────────────────────────────
 app = FastAPI()
@@ -54,30 +60,57 @@ SYMPTOM_WEIGHTS = {
     "Kaki/betis tiba-tiba bengkak dan sangat nyeri (Gejala sumbatan darah)": [0.0, 0.0, 0.0, 0.85],
     "Perut kiri atas terasa mengganjal dan cepat kenyang saat makan (Gejala limpa bengkak)": [0.0, 0.05, 0.15, 0.65],
     "Rasa kliyengan (mau pingsan) disertai kesemutan/kebas": [0.0, 0.0, 0.10, 0.70],
-    "Asimptomatik (tidak ada keluhan klinis)": [0.50, 0.0, 0.0, 0.0]
+    "Asimptomatik (tidak ada keluhan klinis)": [0.50, 0.0, 0.0, 0.0],
 }
+ASIMPTOMATIK = "Asimptomatik (tidak ada keluhan klinis)"
 
 MAP_WEB_TO_DATASET = {
-    'gender': 'L/P', 'age': 'Umur', 'hb': 'HB', 'rbc': 'RBC', 'mcv': 'MCV',
-    'rdw': 'RDW', 'wbc': 'WBC', 'plt': 'PLT', 'neu': 'NEU%', 'lym': 'LYM%',
-    'mon': 'MON%', 'eos': 'EOS%', 'hct': 'HCT', 'mch': 'MCH', 'mchc': 'MCHC',
-    'abs_neu': 'ABS_NEU', 'abs_lym': 'ABS_LYM', 'abs_mon': 'ABS_MON', 
-    'abs_eos': 'ABS_EOS', 'nlr': 'NLR', 'plr': 'PLR', 'mlr': 'MLR'
+    "gender": "L/P", "age": "Umur", "hb": "HB", "rbc": "RBC", "mcv": "MCV",
+    "rdw": "RDW", "wbc": "WBC", "plt": "PLT", "neu": "NEU%", "lym": "LYM%",
+    "mon": "MON%", "eos": "EOS%", "hct": "HCT", "mch": "MCH", "mchc": "MCHC",
+    "abs_neu": "ABS_NEU", "abs_lym": "ABS_LYM", "abs_mon": "ABS_MON",
+    "abs_eos": "ABS_EOS", "nlr": "NLR", "plr": "PLR", "mlr": "MLR",
 }
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
+def _load(nama):
+    with open(os.path.join(BASE_DIR, nama), "rb") as f:
+        return pickle.load(f)
+
+
 try:
-    scaler = joblib.load(os.path.join(BASE_DIR, "std_scaler.pkl"))
-    imputer = joblib.load(os.path.join(BASE_DIR, "knn_imputer.pkl"))
-    ml_model = joblib.load(os.path.join(BASE_DIR, "lr_model.pkl"))
-    print("✅ Model berhasil dimuat!")
+    scaler = _load("std_scaler.pkl")
+    imputer = _load("knn_imputer.pkl")
+    selector = _load("mi_selector.pkl")
+    ml_model = _load("lr_model.pkl")
+    with open(os.path.join(BASE_DIR, "feature_list.json")) as f:
+        FEATURE_INFO = json.load(f)
+    FEATURES_ALL = FEATURE_INFO["features_all"]            # 23 kandidat fitur (urutan pelatihan)
+    FEATURES_SEL = FEATURE_INFO["features_selected"]       # 10 fitur model final
+    SEL_IDX = FEATURE_INFO["selected_indices"]
+    assert list(np.where(selector.get_support())[0]) == SEL_IDX, \
+        "mi_selector.pkl tidak sesuai dengan feature_list.json"
+
+    # Data latih (393 sampel) yang tersimpan pada KNNImputer, dipakai untuk:
+    # (1) background SHAP dan (2) rentang nilai data latih.
+    train_scaled = imputer.transform(imputer._fit_X)
+    train_raw = scaler.inverse_transform(imputer._fit_X)
+    TRAIN_MIN = dict(zip(FEATURES_ALL, np.nanmin(train_raw, axis=0)))
+    TRAIN_MAX = dict(zip(FEATURES_ALL, np.nanmax(train_raw, axis=0)))
+    shap_background = selector.transform(train_scaled)
+    explainer = shap.LinearExplainer(ml_model, shap_background)
+    print("Model final berhasil dimuat:", FEATURES_SEL)
 except Exception as e:
-    print(f"❌ Error loading models: {e}")
+    print(f"Error loading models: {e}")
+    raise
+
 
 @app.get("/")
 def serve_frontend():
     return FileResponse("index.html")
+
 
 # ─── SCHEMA INPUT DARI WEB ───────────────────────────────────────────────────
 class PatientInput(BaseModel):
@@ -98,75 +131,87 @@ class PatientInput(BaseModel):
     weight_sym: Union[float, str, None] = 25.0
     weight_who: Union[float, str, None] = 20.0
 
-# ─── FUNGSI LOGIKA ───────────────────────────────
+
+# ─── PILAR III: ATURAN WHO ───────────────────────────────────────────────────
 def pillar_iii_who_rules(plt_val, wbc_val, hct_val, gender_val, age_val):
     if np.isnan(plt_val) or np.isnan(wbc_val) or np.isnan(hct_val):
         return np.ones(4) / 4.0
-        
+
     raw = np.zeros(4, dtype=float)
-    
-    # ─── LOGIKA HEMATOKRIT BERDASARKAN GENDER ───
     hct_limit = 50.0 if gender_val == 1.0 else 46.0
-    
-    # ─── LOGIKA LEUKOSIT (WBC) BERDASARKAN UMUR ───
+
     if not np.isnan(age_val) and age_val < 1.0:
         wbc_min, wbc_max = 6.0, 17.0
     elif not np.isnan(age_val) and age_val <= 12.0:
         wbc_min, wbc_max = 5.0, 13.0
     else:
         wbc_min, wbc_max = 4.0, 11.0
-    
-    # 1. ATURAN DENGUE
-    if plt_val < 100 and wbc_val < wbc_min and hct_val > hct_limit: raw[2] = 1.0  
-    elif plt_val < 100 and wbc_val < wbc_min: raw[2] = 0.6  
-    elif plt_val < 100 and hct_val > hct_limit: raw[2] = 0.4  
-    
-    # 2. ATURAN ITP
+
+    # 1. Aturan Dengue
+    if plt_val < 100 and wbc_val < wbc_min and hct_val > hct_limit: raw[2] = 1.0
+    elif plt_val < 100 and wbc_val < wbc_min: raw[2] = 0.6
+    elif plt_val < 100 and hct_val > hct_limit: raw[2] = 0.4
+
+    # 2. Aturan ITP
     if plt_val < 100 and wbc_min <= wbc_val <= wbc_max and 35 <= hct_val <= hct_limit: raw[1] = 1.0
-    elif plt_val < 100 and raw[2] == 0: raw[1] = 0.5  
-    
-    # 3. ATURAN TROMBOSITOSIS
+    elif plt_val < 100 and raw[2] == 0: raw[1] = 0.5
+
+    # 3. Aturan Trombositosis
     if plt_val > 600: raw[3] = 1.0
     elif plt_val > 450: raw[3] = 0.7
-    
-    # 4. ATURAN NORMAL
+
+    # 4. Aturan Normal
     if (150 <= plt_val <= 400) and (wbc_min <= wbc_val <= wbc_max) and (35 <= hct_val <= hct_limit): raw[0] = 1.0
-    elif raw.sum() == 0: raw[0] = 0.3  
-    
-    if raw.sum() > 0: return raw / raw.sum()
-    return np.ones(4) / 4.0
+    elif raw.sum() == 0: raw[0] = 0.3
+
+    return raw / raw.sum() if raw.sum() > 0 else np.ones(4) / 4.0
 
 
+# ─── PILAR II: SKOR GEJALA ───────────────────────────────────────────────────
 def pillar_ii_symptom_score(selected_symptoms):
-    if not selected_symptoms: return np.array([0.25, 0.25, 0.25, 0.25])
-    raw = np.zeros(4, dtype=float)
-    for symptom in selected_symptoms: 
-        if symptom in SYMPTOM_WEIGHTS:
-            raw += np.array(SYMPTOM_WEIGHTS[symptom])
-    if "Asimptomatik (tidak ada keluhan klinis)" in selected_symptoms or raw.sum() == 0:
-        return np.array(SYMPTOM_WEIGHTS["Asimptomatik (tidak ada keluhan klinis)"])
-    if raw.sum() > 0: return raw / raw.sum()
-    return np.ones(4) / 4.0
+    """Bobot gejala dijumlahkan per kelas lalu dinormalisasi (jumlah = 1).
+    Tanpa gejala -> 0,25 untuk setiap kelas.
+    Asimptomatik -> vektor asimptomatik yang dinormalisasi ([1, 0, 0, 0])."""
+    if not selected_symptoms:
+        return np.ones(4) / 4.0
+    if ASIMPTOMATIK in selected_symptoms:
+        raw = np.array(SYMPTOM_WEIGHTS[ASIMPTOMATIK], dtype=float)
+    else:
+        raw = np.zeros(4, dtype=float)
+        for s in selected_symptoms:
+            if s in SYMPTOM_WEIGHTS:
+                raw += np.array(SYMPTOM_WEIGHTS[s])
+    return raw / raw.sum() if raw.sum() > 0 else np.ones(4) / 4.0
 
 
+def parse_weight(val, default):
+    try:
+        w = float(val) / 100.0
+        return w if w >= 0 else 0.0
+    except (TypeError, ValueError):
+        return default
+
+
+# ─── NARASI CLIX-M ───────────────────────────────────────────────────────────
 def get_detailed_explanation(feature_name, shap_value, pred_class, raw_val):
     feat_upper = feature_name.upper()
-    
-    # ➡️ LOGIKA CERDAS ARAH PENJELASAN SHAP
-    if pred_class == 0:  # Jika Prediksi NORMAL
+
+    if pred_class == 0:
         if shap_value > 0:
             direction = "memperkuat probabilitas bahwa pasien dalam kondisi Normal."
         else:
             direction = "sedikit menurunkan keyakinan sistem, karena nilai ini menyimpang dari titik rata-rata pasien sehat di dalam dataset."
-    else:  # Jika Prediksi PENYAKIT (ITP, Dengue, Trombositosis)
+    else:
         if shap_value > 0:
             direction = "mendorong/meningkatkan probabilitas diagnosis penyakit ini."
         else:
             direction = "menahan/mengurangi probabilitas diagnosis penyakit ini."
-            
-    base_text = f"**{feat_upper} ({round(raw_val, 2)}):** Nilai ini {direction}"
-    
-    # ─── 1. TROMBOSIT (PLT) ───
+
+    if raw_val is None or pd.isna(raw_val):
+        return f"**{feat_upper} (tidak tersedia):** Nilai diisi oleh imputasi KNN dan {direction}"
+
+    base_text = f"**{feat_upper} ({round(float(raw_val), 2)}):** Nilai ini {direction}"
+
     if feat_upper == "PLT":
         if raw_val < 150:
             if pred_class == 1: return base_text + " Penurunan trombosit (trombositopenia) terisolasi adalah tanda khas ITP akibat destruksi keping darah oleh autoimun."
@@ -176,8 +221,7 @@ def get_detailed_explanation(feature_name, shap_value, pred_class, raw_val):
             return base_text + " Peningkatan trombosit (trombositosis) mengonfirmasi hiperaktivitas sumsum tulang, sering muncul sebagai respons reaktif terhadap inflamasi sistemik atau infeksi."
         else:
             return base_text + " Jumlah trombosit berada dalam rentang normal, menunjukkan fungsi hemostasis (pembekuan darah) primer yang stabil."
-                
-    # ─── 2. LEUKOSIT (WBC) ───
+
     elif feat_upper == "WBC":
         if raw_val < 4.0:
             if pred_class == 2: return base_text + " Penurunan sel darah putih (leukopenia) merupakan penanda patognomonik awal pada infeksi virus akut seperti Dengue."
@@ -187,67 +231,31 @@ def get_detailed_explanation(feature_name, shap_value, pred_class, raw_val):
         else:
             return base_text + " Jumlah leukosit dalam rentang fisiologis menandakan fungsi imunitas bawaan (innate immunity) beroperasi normal."
 
-    # ─── 3. HEMOGLOBIN (HB) & HEMATOKRIT (HCT) ───
-    elif feat_upper == "HB":
-        if raw_val < 12.0: return base_text + " Penurunan kadar hemoglobin (anemia) dapat diakibatkan oleh komplikasi perdarahan klinis atau defisiensi zat besi."
-        elif raw_val > 16.0: return base_text + " Kadar hemoglobin di atas normal mengindikasikan polisitemia atau hemokonsentrasi akibat dehidrasi/kebocoran plasma."
-        else: return base_text + " Kadar hemoglobin normal menandakan kapasitas transportasi oksigen sistemik tidak terganggu."
-            
-    elif feat_upper == "HCT":
-        if raw_val < 35: return base_text + " Penurunan hematokrit mencerminkan kondisi hemodilusi (kelebihan cairan) atau anemia seluler."
-        elif raw_val > 45 and pred_class == 2: return base_text + " Peningkatan hematokrit (hemokonsentrasi) adalah tanda bahaya mutlak pada Dengue yang merepresentasikan sindrom kebocoran plasma."
-        elif raw_val > 45: return base_text + " Hematokrit tinggi menandakan tingginya viskositas (kekentalan) darah."
-        else: return base_text + " Viskositas dan persentase volume sel darah merah terpantau seimbang."
-
-    # ─── 4. ERITROSIT (RBC) ───
     elif feat_upper == "RBC":
         if raw_val < 4.0: return base_text + " Penurunan hitung eritrosit memperkuat indikasi anemia, riwayat perdarahan, atau supresi pembentukan darah merah."
         elif raw_val > 5.5: return base_text + " Peningkatan hitung eritrosit menandakan hiperaktivitas eritropoiesis atau hemokonsentrasi."
         else: return base_text + " Jumlah eritrosit berada pada ambang batas fisiologis yang sehat."
-            
-    # ─── 5. INDEKS ERITROSIT (MCV, MCH, MCHC, RDW) ───
+
     elif feat_upper == "MCV":
         if raw_val < 80: return base_text + " MCV rendah (mikrositik) sering menjadi rujukan penyakit penyerta seperti anemia defisiensi besi."
         elif raw_val > 100: return base_text + " MCV tinggi (makrositik) mengindikasikan kemungkinan defisiensi B12/folat."
         else: return base_text + " Ukuran sel darah merah proporsional (normositik)."
-            
+
     elif feat_upper == "MCH":
         if raw_val < 27: return base_text + " MCH rendah merepresentasikan sel darah merah yang hipokromik (pucat) akibat kurangnya massa hemoglobin."
         elif raw_val > 33: return base_text + " MCH tinggi (hiperkromik) umumnya sejalan dengan membesarnya ukuran sel darah merah (makrositik)."
         else: return base_text + " Kepadatan hemoglobin per sel darah merah terpantau normokromik."
-            
-    elif feat_upper == "MCHC":
-        if raw_val < 32: return base_text + " Penurunan MCHC mengonfirmasi kondisi hipokromia absolut."
-        elif raw_val > 36: return base_text + " MCHC sangat tinggi dapat mengindikasikan sferositosis autoimun atau hemolisis."
-        else: return base_text + " Konsentrasi hemoglobin intraseluler seimbang dengan volume sel."
 
-    elif feat_upper == "RDW":
-        if raw_val > 14.5: return base_text + " RDW tinggi (anisositosis) menunjukkan variasi ukuran sel darah merah yang abnormal, sangat berkaitan dengan stres inflamasi kronis atau pemulihan perdarahan."
-        elif raw_val < 11.5: return base_text + " RDW rendah menunjukkan sel darah merah yang sangat seragam."
-        else: return base_text + " Distribusi ukuran eritrosit normal dan seragam."
-
-    # ─── 6. DIFERENSIAL LEUKOSIT ABSOLUT ───
     elif feat_upper == "ABS_NEU":
         if raw_val < 2.0: return base_text + " Penurunan neutrofil (neutropenia) sangat khas terjadi pada fase akut infeksi virus akibat supresi sumsum tulang."
         elif raw_val > 7.5: return base_text + " Peningkatan neutrofil (neutrofilia) adalah respons garda terdepan sistem imun terhadap bakteri piogenik atau peradangan jaringan."
         else: return base_text + " Jumlah neutrofil normal menandakan tidak ada lonjakan infeksi bakteri."
-            
-    elif feat_upper == "ABS_LYM":
-        if raw_val < 1.0: return base_text + " Limfopenia (penurunan limfosit) adalah respons awal imunitas akibat stres infeksi virus sistemik yang parah."
-        elif raw_val > 4.0: return base_text + " Limfositosis mengindikasikan mobilisasi aktif imunitas adaptif (sel T dan sel B) untuk membersihkan sisa virus atau fase pemulihan infeksi."
-        else: return base_text + " Jumlah limfosit berada dalam batas kekebalan adaptif yang normal."
 
-    elif feat_upper == "ABS_MON":
-        if raw_val < 0.2: return base_text + " Monositopenia menunjukkan penurunan sel fagosit, sering kali terjadi pada infeksi akut parah."
-        elif raw_val > 0.8: return base_text + " Monositosis menunjukkan hiperaktivitas makrofag pembersih jaringan, yang umum pada masa pemulihan inflamasi."
-        else: return base_text + " Kadar monosit normal."
-        
     elif feat_upper == "ABS_EOS":
         if raw_val < 0.05: return base_text + " Eosinopenia adalah temuan reaktif terhadap stres akut primer atau inflamasi sistemik."
         elif raw_val > 0.5: return base_text + " Eosinofilia umumnya merupakan penanda biologi khas untuk reaksi alergi atau infeksi parasit."
         else: return base_text + " Kadar eosinofil wajar tanpa indikasi alergi."
-        
-    # ─── 7. RASIO INFLAMASI (NLR, PLR, MLR) ───
+
     elif feat_upper in ["NLR", "PLR", "MLR"]:
         korelasi = "NLR (Rasio Neutrofil/Limfosit)" if feat_upper == "NLR" else "PLR (Rasio Trombosit/Limfosit)" if feat_upper == "PLR" else "MLR (Rasio Monosit/Limfosit)"
         if raw_val > 3.0:
@@ -256,137 +264,117 @@ def get_detailed_explanation(feature_name, shap_value, pred_class, raw_val):
             return base_text + f" Nilai {korelasi} yang sangat rendah sering mengikuti pola limfositosis relatif pada infeksi virus."
         else:
             return base_text + f" {korelasi} berada dalam ekuilibrium (keseimbangan) fisiologis."
-        
+
+    # Umur dan LYM% tidak memiliki aturan narasi patofisiologis:
+    # narasi hanya memuat arah kontribusi SHAP.
     return base_text
+
 
 # ─── ENDPOINT UTAMA ──────────────────────────────────────────────────────────
 @app.post("/api/predict")
 def predict_diagnosis(data: PatientInput):
     try:
-        if hasattr(data, "model_dump"):
-            raw_input = data.model_dump(exclude={"symptoms", "weight_ml", "weight_sym", "weight_who"})
-        else:
-            raw_input = data.dict(exclude={"symptoms", "weight_ml", "weight_sym", "weight_who"})
-            
+        raw_input = data.model_dump(exclude={"symptoms", "weight_ml", "weight_sym", "weight_who"})
         raw_dict = {}
         for k, v in raw_input.items():
-            val_str = str(v).strip()
-            if v is None or val_str in ["", "-"]:
+            try:
+                raw_dict[k.lower()] = float(v) if v is not None and str(v).strip() not in ["", "-"] else np.nan
+            except ValueError:
                 raw_dict[k.lower()] = np.nan
-            else:
-                try: raw_dict[k.lower()] = float(v)
-                except ValueError: raw_dict[k.lower()] = np.nan
-                    
-        raw_df = pd.DataFrame([raw_dict])
-        
-        cbc_calc = CBCCalculatorTransformer()
-        cbc_calc.fit(raw_df) 
-        engineered_df = cbc_calc.transform(raw_df)
-        
-        engineered_df.columns = [c.lower() for c in engineered_df.columns]
-        engineered_df = engineered_df.rename(columns=MAP_WEB_TO_DATASET)
-        
-        expected_features = list(scaler.feature_names_in_)
-        aligned_df = pd.DataFrame(columns=expected_features)
-        aligned_df.loc[0] = np.nan
-        
-        for expected_col in expected_features:
-            if expected_col in engineered_df.columns:
-                aligned_df.at[0, expected_col] = engineered_df.iloc[0][expected_col]
-        
-        scaled_data = scaler.transform(aligned_df)
-        imputed_data = imputer.transform(scaled_data)
-        final_df = pd.DataFrame(imputed_data, columns=expected_features)
-        
-        raw_imputed_data = scaler.inverse_transform(final_df)
-        raw_imputed_df = pd.DataFrame(raw_imputed_data, columns=expected_features)
-        
-        target_features = ['PLT', 'MCV', 'PLR', 'HCT', 'HB', 'WBC', 'ABS_NEU', 'RDW', 'ABS_EOS', 'NLR']
-        ml_features = [exp_col for tf in target_features for exp_col in expected_features if tf.lower() == exp_col.lower()]
-        ml_input_df = final_df[ml_features]
-        
-        p_ml = ml_model.predict_proba(ml_input_df.values)[0]
-        if len(p_ml) > 4: p_ml = p_ml[:4]
-        if len(p_ml) < 4: p_ml = np.pad(p_ml, (0, 4 - len(p_ml)))
-        p_ml = p_ml / p_ml.sum()
-        
-        hct_calc = float(engineered_df['HCT'].iloc[0]) if pd.notna(engineered_df['HCT'].iloc[0]) else np.nan
-        safe_symptoms = data.symptoms if data.symptoms is not None else []
-        p_sym = pillar_ii_symptom_score(safe_symptoms)
-        
-        gender_input = raw_dict.get("gender", np.nan)
-        age_input = raw_dict.get("age", np.nan)
-        
-        p_who = pillar_iii_who_rules(raw_dict["plt"], raw_dict["wbc"], hct_calc, gender_input, age_input)
-        
-        try: w_ml = float(data.weight_ml) / 100.0
-        except: w_ml = 0.55
-        try: w_sym = float(data.weight_sym) / 100.0
-        except: w_sym = 0.25
-        try: w_who = float(data.weight_who) / 100.0
-        except: w_who = 0.20
-        
-        p_final = (w_ml * p_ml) + (w_sym * p_sym) + (w_who * p_who)
-        if p_final.sum() > 0: p_final = p_final / p_final.sum()
-        pred_class = int(np.argmax(p_final))
-        
-        background_data = pd.DataFrame(np.zeros((1, len(ml_features))), columns=ml_features)
-        explainer = shap.Explainer(ml_model, background_data)
-        shap_explanation = explainer(ml_input_df)
-        
-        if isinstance(shap_explanation.values, list):
-            sv_class = shap_explanation.values[pred_class][0] 
-            base_val = shap_explanation.base_values[pred_class][0]
-        else:
-            if len(shap_explanation.values.shape) == 3:
-                sv_class = shap_explanation.values[0, :, pred_class]
-                base_val = shap_explanation.base_values[0, pred_class] if len(np.array(shap_explanation.base_values).shape) == 2 else shap_explanation.base_values[pred_class]
-            else:
-                sv_class = shap_explanation.values[0]
-                base_val = shap_explanation.base_values[0]
 
-        single_expl = shap.Explanation(values=sv_class, base_values=base_val, data=ml_input_df.iloc[0].values, feature_names=ml_features)
-        
-        # ➡️ SHAP VISUALISASI BERKUALITAS TINGGI
+        # 1. Fitur turunan
+        engineered_df = CBCCalculatorTransformer().fit_transform(pd.DataFrame([raw_dict]))
+
+        # 2. Susun 23 kandidat fitur sesuai urutan pelatihan (feature_list.json)
+        aligned = np.array([[engineered_df[c].iloc[0] if c in engineered_df.columns else np.nan
+                             for c in FEATURES_ALL]], dtype=float)
+        aligned_df = pd.DataFrame(aligned, columns=FEATURES_ALL)
+
+        # 3. Penskalaan -> imputasi -> seleksi MI -> prediksi
+        scaled = scaler.transform(aligned)
+        imputed = imputer.transform(scaled)
+        ml_input = selector.transform(imputed)
+        raw_imputed = pd.DataFrame(scaler.inverse_transform(imputed), columns=FEATURES_ALL)
+
+        p_ml = ml_model.predict_proba(ml_input)[0]
+
+        # Peringatan: fitur model yang kosong (diimputasi) dan nilai di luar rentang data latih
+        peringatan = []
+        for c in FEATURES_SEL:
+            v = aligned_df[c].iloc[0]
+            if np.isnan(v):
+                peringatan.append(f"{c} tidak tersedia dan diisi dengan imputasi KNN.")
+            elif v < TRAIN_MIN[c] or v > TRAIN_MAX[c]:
+                peringatan.append(f"{c} = {round(float(v), 2)} berada di luar rentang data latih "
+                                  f"({round(float(TRAIN_MIN[c]), 2)} - {round(float(TRAIN_MAX[c]), 2)}); "
+                                  f"prediksi Pilar I merupakan ekstrapolasi.")
+
+        # 4. Pilar II dan Pilar III
+        hct_calc = float(engineered_df["HCT"].iloc[0])
+        p_sym = pillar_ii_symptom_score(data.symptoms or [])
+        p_who = pillar_iii_who_rules(raw_dict["plt"], raw_dict["wbc"], hct_calc,
+                                     raw_dict.get("gender", np.nan), raw_dict.get("age", np.nan))
+
+        # 5. Fusi berbobot (bobot dari antarmuka, bawaan 55/25/20)
+        w_ml = parse_weight(data.weight_ml, 0.55)
+        w_sym = parse_weight(data.weight_sym, 0.25)
+        w_who = parse_weight(data.weight_who, 0.20)
+        if w_ml + w_sym + w_who == 0:
+            w_ml, w_sym, w_who = 0.55, 0.25, 0.20
+        p_final = w_ml * p_ml + w_sym * p_sym + w_who * p_who
+        p_final = p_final / p_final.sum()
+        pred_class = int(np.argmax(p_final))
+
+        # 6. SHAP lokal (LinearExplainer, background = data latih) untuk kelas terprediksi
+        sv = explainer(ml_input)
+        values = np.asarray(sv.values)
+        base_values = np.asarray(sv.base_values)
+        sv_class = values[0, :, pred_class] if values.ndim == 3 else values[0]
+        base_val = base_values[0, pred_class] if base_values.ndim == 2 else base_values[pred_class]
+        raw_sel = raw_imputed[FEATURES_SEL].iloc[0].values
+
+        single_expl = shap.Explanation(values=sv_class, base_values=float(base_val),
+                                       data=np.round(raw_sel, 2), feature_names=FEATURES_SEL)
         plt.figure(figsize=(10, 7))
         shap.plots.waterfall(single_expl, max_display=10, show=False)
         buf = io.BytesIO()
-        plt.savefig(buf, format="png", dpi=150, bbox_inches='tight')
+        plt.savefig(buf, format="png", dpi=150, bbox_inches="tight")
         buf.seek(0)
-        image_base64 = base64.b64encode(buf.read()).decode('utf-8')
-        plt.close()
-        
-        sv_vals = single_expl.values
-        # ➡️ AMBIL 5 FITUR UNTUK NARASI
-        sorted_idx = np.argsort(np.abs(sv_vals))[::-1][:5]
-        explanations = [get_detailed_explanation(ml_features[idx], sv_vals[idx], pred_class, raw_imputed_df.iloc[0][ml_features[idx]]) for idx in sorted_idx]
-        
+        image_base64 = base64.b64encode(buf.read()).decode("utf-8")
+        plt.close("all")
+
+        sorted_idx = np.argsort(np.abs(sv_class))[::-1][:5]
+        explanations = [get_detailed_explanation(FEATURES_SEL[i], sv_class[i], pred_class,
+                                                 aligned_df[FEATURES_SEL[i]].iloc[0])
+                        for i in sorted_idx]
+
         def safe_round(val): return round(float(val), 2) if pd.notna(val) else "N/A"
         calc_results = {
-            "Hematokrit (HCT)": safe_round(engineered_df['HCT'].iloc[0]),
-            "Mean Corpuscular Hemoglobin (MCH)": safe_round(engineered_df['MCH'].iloc[0]),
-            "MCH Concentration (MCHC)": safe_round(engineered_df['MCHC'].iloc[0]),
-            "Absolut Neutrofil": safe_round(engineered_df['ABS_NEU'].iloc[0]),
-            "Absolut Limfosit": safe_round(engineered_df['ABS_LYM'].iloc[0]),
-            "Absolut Monosit": safe_round(engineered_df['ABS_MON'].iloc[0]),
-            "Absolut Eosinofil": safe_round(engineered_df['ABS_EOS'].iloc[0]),
-            "Neutrophil-Lymphocyte Ratio (NLR)": safe_round(engineered_df['NLR'].iloc[0]),
-            "Platelet-Lymphocyte Ratio (PLR)": safe_round(engineered_df['PLR'].iloc[0]),
-            "Monocyte-Lymphocyte Ratio (MLR)": safe_round(engineered_df['MLR'].iloc[0])
+            "Hematokrit (HCT)": safe_round(engineered_df["HCT"].iloc[0]),
+            "Mean Corpuscular Hemoglobin (MCH)": safe_round(engineered_df["MCH"].iloc[0]),
+            "MCH Concentration (MCHC)": safe_round(engineered_df["MCHC"].iloc[0]),
+            "Absolut Neutrofil": safe_round(engineered_df["ABS_NEU"].iloc[0]),
+            "Absolut Limfosit": safe_round(engineered_df["ABS_LYM"].iloc[0]),
+            "Absolut Monosit": safe_round(engineered_df["ABS_MON"].iloc[0]),
+            "Absolut Eosinofil": safe_round(engineered_df["ABS_EOS"].iloc[0]),
+            "Neutrophil-Lymphocyte Ratio (NLR)": safe_round(engineered_df["NLR"].iloc[0]),
+            "Platelet-Lymphocyte Ratio (PLR)": safe_round(engineered_df["PLR"].iloc[0]),
+            "Monocyte-Lymphocyte Ratio (MLR)": safe_round(engineered_df["MLR"].iloc[0]),
         }
-        
+
         breakdown_dict = {}
-        if w_ml > 0: breakdown_dict["Pilar_1_ML"] = round(float(p_ml[pred_class]*100), 2)
-        if w_sym > 0: breakdown_dict["Pilar_2_Sym"] = round(float(p_sym[pred_class]*100), 2)
-        if w_who > 0: breakdown_dict["Pilar_3_WHO"] = round(float(p_who[pred_class]*100), 2)
-            
+        if w_ml > 0: breakdown_dict["Pilar_1_ML"] = round(float(p_ml[pred_class] * 100), 2)
+        if w_sym > 0: breakdown_dict["Pilar_2_Sym"] = round(float(p_sym[pred_class] * 100), 2)
+        if w_who > 0: breakdown_dict["Pilar_3_WHO"] = round(float(p_who[pred_class] * 100), 2)
+
         return {
             "status": "success", "diagnosis": CLASS_NAMES[pred_class],
-            "probabilitas_final": round(float(p_final[pred_class]*100), 2),
+            "probabilitas_final": round(float(p_final[pred_class] * 100), 2),
             "breakdown": breakdown_dict, "shap_image": image_base64,
-            "clix_m_text": explanations, "kalkulasi_fisiologis": calc_results 
+            "clix_m_text": explanations, "kalkulasi_fisiologis": calc_results,
+            "peringatan": peringatan,
         }
-        
+
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
