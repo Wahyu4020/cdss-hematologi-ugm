@@ -1,9 +1,9 @@
 fastapi
 uvicorn
-pydantic
-scikit-learn
-joblib
-shap
+pydantic>=2
 numpy
 pandas
 matplotlib
+scikit-learn==1.6.1
+imbalanced-learn==0.14.2
+shap
