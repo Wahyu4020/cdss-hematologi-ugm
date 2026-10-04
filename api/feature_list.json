@@ -1,0 +1,58 @@
+{
+  "features_all": [
+    "L/P",
+    "Umur",
+    "WBC",
+    "RBC",
+    "HB",
+    "HCT",
+    "MCV",
+    "MCH",
+    "MCHC",
+    "RDW",
+    "PLT",
+    "NEU%",
+    "LYM%",
+    "MON%",
+    "EOS%",
+    "BASO%",
+    "ABS_NEU",
+    "ABS_LYM",
+    "ABS_MON",
+    "ABS_EOS",
+    "NLR",
+    "PLR",
+    "MLR"
+  ],
+  "features_selected": [
+    "Umur",
+    "WBC",
+    "RBC",
+    "MCV",
+    "MCH",
+    "PLT",
+    "LYM%",
+    "ABS_NEU",
+    "ABS_EOS",
+    "PLR"
+  ],
+  "selected_indices": [
+    1,
+    2,
+    3,
+    6,
+    7,
+    10,
+    12,
+    16,
+    19,
+    21
+  ],
+  "selector": "MutualInfo Top-10 (random_state=42)",
+  "class_mapping": {
+    "0": "Normal",
+    "1": "ITP",
+    "2": "DBD",
+    "3": "Trombositosis"
+  }
+}
