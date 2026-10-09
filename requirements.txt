@@ -1,9 +1,9 @@
-fastapi
-uvicorn
-pydantic>=2
-numpy
-pandas
-matplotlib
+fastapi==0.142.2
+uvicorn==0.54.0
+pydantic==2.13.5
+numpy==2.5.3
+pandas==3.0.6
+matplotlib==3.11.2
 scikit-learn==1.6.1
 imbalanced-learn==0.14.2
-shap
+shap==0.52.0
