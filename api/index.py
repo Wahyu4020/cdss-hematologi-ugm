@@ -100,7 +100,8 @@ try:
     TRAIN_MIN = dict(zip(FEATURES_ALL, np.nanmin(train_raw, axis=0)))
     TRAIN_MAX = dict(zip(FEATURES_ALL, np.nanmax(train_raw, axis=0)))
     shap_background = selector.transform(train_scaled)
-    explainer = shap.LinearExplainer(ml_model, shap_background)
+    explainer = shap.LinearExplainer(
+        ml_model, shap.maskers.Independent(shap_background, max_samples=len(shap_background)))
     print("Model final berhasil dimuat:", FEATURES_SEL)
 except Exception as e:
     print(f"Error loading models: {e}")
